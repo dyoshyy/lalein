@@ -265,7 +265,8 @@ def test_zundamon_jarvisctl_does_not_load_the_tui_library():
 
 
 @pytest.mark.skipif(WINDOWS, reason="the GTK character overlay runs under the Linux system python")
-def test_character_runs_the_overlay_under_the_system_python():
+def test_character_runs_the_overlay_under_the_system_python(monkeypatch):
+    monkeypatch.setattr(ctl.platform, "system", lambda: "linux")
     calls = []
     code = ctl._character("speaking", execve=lambda *a: calls.append(a))
     (path, cmd, env), = calls
@@ -288,6 +289,8 @@ def character_prefs(tmp_path, monkeypatch):
 def test_character_hide_and_toggle_only_write_the_prefs(character_prefs, monkeypatch):
     from zundamon_jarvis.ui.character import load_prefs
 
+    monkeypatch.setattr(ctl, "_character_running", lambda: None)  # Linux: whether it runs is not known
+
     monkeypatch.setattr(ctl, "_character", lambda preview: pytest.fail("should not start the overlay"))
     assert ctl.main(["character", "hide"]) == 0
     assert load_prefs(character_prefs).hidden is True
@@ -307,6 +310,49 @@ def test_character_show_unhides_and_starts_it(character_prefs, monkeypatch):
     monkeypatch.setattr(ctl, "_character", lambda preview: started.append(preview) or 0)
     assert ctl.main(["character", "show"]) == 0
     assert load_prefs(character_prefs) == Prefs(hidden=False, avatar="cat") and started == [None]
+
+
+def test_toggling_a_character_that_is_not_running_starts_it(character_prefs, monkeypatch):
+    from zundamon_jarvis.ui.character import load_prefs
+
+    started = []
+    monkeypatch.setattr(ctl, "_character", lambda preview: started.append(preview) or 0)
+    monkeypatch.setattr(ctl, "_character_running", lambda: False)  # Windows / macOS know
+    assert ctl.main(["character", "toggle"]) == 0
+    assert load_prefs(character_prefs).hidden is False and started == [None]
+    monkeypatch.setattr(ctl, "_character_running", lambda: True)
+    assert ctl.main(["character", "toggle"]) == 0
+    assert load_prefs(character_prefs).hidden is True and started == [None]
+
+
+@pytest.mark.parametrize("system, module", [("windows", "character_win"), ("mac", "character_mac")])
+def test_character_runs_in_this_python_on_windows_and_macos(monkeypatch, system, module):
+    import importlib
+
+    seen = []
+    target = importlib.import_module(f"zundamon_jarvis.ui.{module}")
+    monkeypatch.setattr(ctl.platform, "system", lambda: system)
+    monkeypatch.setattr(target, "main", lambda argv: seen.append(argv) or 0)
+    assert ctl._character("thinking", "cat", execve=lambda *a: pytest.fail("no system python here")) == 0
+    assert ctl._character(None) == 0
+    assert seen == [["thinking", "cat"], []]
+
+
+def test_spawn_character_toggle_runs_ctl_in_the_background(monkeypatch):
+    calls = []
+
+    class Proc:
+        def __init__(self, cmd, **kw):
+            calls.append((cmd, kw))
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(ctl.subprocess, "Popen", Proc)
+    ctl.spawn_character_toggle()
+    (cmd, kw), = calls
+    assert cmd == [ctl._zundamon_jarvisctl(), "character", "toggle"]
+    assert kw["stdin"] == kw["stdout"] == kw["stderr"] == ctl.subprocess.DEVNULL
 
 
 def test_character_avatar_and_monitor_are_remembered(character_prefs, capsys):

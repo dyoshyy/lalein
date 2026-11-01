@@ -16,6 +16,7 @@ def test_menu_listening():
         ("Pause", "pause", True),
         ("Conversation…", "conversation", True),
         ("Settings…", "settings", True),
+        ("Show / hide the character", "character", True),
         ("Quit menu bar (daemon keeps running)", "quit", True),
     ]
 
@@ -36,8 +37,15 @@ def test_menu_when_daemon_down():
     m = menubar.menu_model(None, lang="en")
     assert m.items[0].label == "Not running" and not m.items[0].enabled
     actions = {i.action: i.enabled for i in m.items[1:]}
-    assert actions == {"pause": False, "conversation": False, "settings": False, "quit": True}
+    assert actions == {"pause": False, "conversation": False, "settings": False, "character": True, "quit": True}
     assert len(m.title) == 1
+
+
+def test_the_character_can_be_shown_or_hidden_whether_or_not_the_daemon_runs():
+    for status in (None, {"state": "listening", "text": "Listening"}):
+        m = menubar.menu_model(status, lang="en")
+        assert menubar.MenuItem("Show / hide the character", "character") in m.items
+        assert m.items[-2].action == "character"  # just above quit
 
 
 def test_menu_explains_mic_permission():
@@ -98,6 +106,7 @@ def test_menu_in_japanese_and_english():
         ("一時停止", "pause", True),
         ("会話…", "conversation", True),
         ("設定…", "settings", True),
+        ("キャラクターを表示 / 隠す", "character", True),
         ("メニューバーを終了（本体は動き続けます）", "quit", True),
     ]
     assert ja.note == menubar.TEXT["login"]["ja"]

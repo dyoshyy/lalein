@@ -148,6 +148,8 @@ def act_on(action: str, stop: Callable[[], None]) -> None:
                 pass
         elif action in ("conversation", "settings"):
             ctl.open_window("watch" if action == "conversation" else "settings")
+        elif action == "character":
+            ctl.spawn_character_toggle()
         elif action == "update":
             updater.launch_from_menu("windows")
 

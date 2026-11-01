@@ -48,9 +48,15 @@ try:
 except (ValueError, ImportError):
     LayerShell = None
 
-from zundamon_jarvis.core.control import request, socket_path  # noqa: E402
 from zundamon_jarvis.ui.character import (  # noqa: E402
     AVATARS,
+    BUBBLE_H,
+    CHAR_H,
+    CHAR_W,
+    CHAR_X,
+    CHAR_Y,
+    HEIGHT,
+    WIDTH,
     Bubble,
     Line,
     Prefs,
@@ -69,16 +75,11 @@ from zundamon_jarvis.ui.character import (  # noqa: E402
     save_prefs,
     update_prefs,
 )
-from zundamon_jarvis.ui.looks import draw_character  # noqa: E402
+from zundamon_jarvis.ui.looks import BUBBLE_STYLE, draw_character  # noqa: E402
+from zundamon_jarvis.ui.overlay import POLL_S, EventStream, StatePoller  # noqa: E402
 
 APP_ID = "dev.dyoshyy.zundamon_jarvis.character"
 NAMESPACE = "zundamon-jarvis-character"
-CHAR_W, CHAR_H = 160, 180  # the character, at the bottom-right of the window
-BUBBLE_H = 110  # room above it for the speech bubble
-WIDTH, HEIGHT = 300, CHAR_H + BUBBLE_H
-CHAR_X, CHAR_Y = WIDTH - CHAR_W, HEIGHT - CHAR_H
-POLL_S = 0.5
-RETRY_S = 2.0
 FPS_MS = 33
 BUBBLE_FONT = "sans 11"
 BUBBLE_PAD = 10
@@ -86,61 +87,7 @@ BUBBLE_LINES = 4
 # The right-click menu caps its own height below its content (with a scrollbar) in a layer-shell
 # window, so it is given room for its longest page: a submenu's "back" row and its items.
 MENU_ROW_PX, MENU_PAD_PX = 34, 24
-# (fill, text) per speaker
-BUBBLE_STYLE = {"me": ((1.0, 1.0, 1.0, 0.96), (0.12, 0.14, 0.25)),
-                "you": ((0.86, 0.96, 0.87, 0.96), (0.10, 0.30, 0.15)),
-                "note": ((0.12, 0.14, 0.25, 0.88), (1.0, 1.0, 1.0))}
 
-
-
-class StatePoller:
-    """Polls the daemon's ``status`` on a thread; ``state`` is always safe to read."""
-
-    def __init__(self) -> None:
-        self.state = "offline"
-        threading.Thread(target=self._run, daemon=True).start()
-
-    def _run(self) -> None:
-        while True:
-            try:
-                self.state = normalize(request("status", timeout=1.0).get("state"))
-            except (OSError, ValueError, AttributeError):
-                self.state = "offline"
-            time.sleep(POLL_S)
-
-
-class EventStream:
-    """Follows the control socket's ``watch`` stream on a thread; each event (and a
-    ``{"kind": "hello"}`` on every disconnect, so nothing stale stays up) goes to ``deliver``
-    on the GTK main loop."""
-
-    def __init__(self, deliver) -> None:
-        self._deliver = deliver
-        threading.Thread(target=self._run, daemon=True).start()
-
-    def _send(self, ev: dict) -> None:
-        GLib.idle_add(lambda: self._deliver(ev) and False)
-
-    def _run(self) -> None:
-        while True:
-            try:
-                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-                    s.settimeout(2)
-                    s.connect(str(socket_path()))
-                    s.sendall(b"watch\n")
-                    s.settimeout(None)
-                    with s.makefile("rb") as f:
-                        for raw in f:
-                            try:
-                                ev = json.loads(raw)
-                            except ValueError:
-                                continue
-                            if isinstance(ev, dict):
-                                self._send(ev)
-            except OSError:
-                pass
-            self._send({"kind": "hello"})
-            time.sleep(RETRY_S)
 
 
 def _rounded(cr: cairo.Context, x: float, y: float, w: float, h: float, r: float) -> None:
@@ -249,8 +196,8 @@ def build_window(app: Gtk.Application, forced_state: str | None = None,
             hearing["on"] = False
         bubble.feed(ev, time.monotonic())
 
-    if not forced_state:
-        EventStream(on_event)
+    if not forced_state:  # its events arrive on its thread: handle them on GTK's
+        EventStream(lambda ev: GLib.idle_add(lambda: on_event(ev) and False))
 
     win = Gtk.ApplicationWindow(application=app)
     win.set_title("ZundamonJarvis character")
