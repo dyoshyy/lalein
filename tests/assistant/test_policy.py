@@ -418,6 +418,9 @@ def test_describe_calendar_event_flat_start_time():
     ("ls && rm x", "rm で x を消すけど、いい？"),
     ("sudo pacman -Syu", "sudo で pacman -Syu を実行するけど、いい？"),
     ("git push --force", "強制プッシュするけど、いい？"),
+    ("rm -f /tmp/h_*.db", "rm で tmp の h スター.db を消すけど、いい？"),
+    ("cd x && rm -rf /var/log/app/old.log /var/log/app/new.log", "rm で app の old.log と app の new.log を消すけど、いい？"),
+    ("rm -rf build/out_dir/*", "rm で out dir の スター を消すけど、いい？"),
 ])
 def test_describe_bash_exact(cmd, expected):
     assert describe_action("Bash", {"command": cmd}) == expected
@@ -480,6 +483,15 @@ def test_describe_is_plain_spoken_question(tool, inp):
     assert d.endswith("いい？")
     for bad in ("_", "/", "http", "*", "`", "#", "{", "}", "\\"):
         assert bad not in d
+
+
+def test_describe_write_names_parent_dir():
+    assert describe_action("Write", {"file_path": "/home/alice/.bashrc"}) == "「alice の .bashrc」を書き換えるけど、いい？"
+
+
+def test_describe_long_path_is_truncated():
+    d = describe_action("Bash", {"command": "rm " + "/a/" + "x" * 80})
+    assert len(d) < 60 and d.endswith("いい？")
 
 
 def test_describe_unknown_tool_falls_back():
