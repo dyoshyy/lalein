@@ -713,7 +713,7 @@ def test_releases_before_0_6_are_distributed_under_the_old_name():
 def test_an_update_across_the_rename_knows_both_names(monkeypatch):
     monkeypatch.setattr(update, "installed_dist", lambda: "zundamon-jarvis")
     r = update.rename_for("v0.6.0", "0.5.0", "/Users/me/.local/bin/lalein")
-    assert r == update.Rename("zundamon-jarvis", "v0.5.0", "/Users/me/.local/bin/lalein")
+    assert r == update.Rename("zundamon-jarvis", "v0.5.0", str(Path("/Users/me/.local/bin/lalein")))  # this OS's path
     win = update.rename_for("v0.6.0", "0.5.0", r"C:\Users\me\.local\bin\lalein.exe")
     assert win.exe.endswith("lalein.exe")
     assert update.rename_for("v0.5.1", "0.5.0", "/x/lalein") is None  # same name

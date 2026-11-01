@@ -22,7 +22,7 @@ import sys
 import urllib.request
 from collections.abc import Callable
 from importlib import resources
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
 from lalein.core import platform
@@ -323,7 +323,7 @@ def render_unit(text: str, exe: str | None) -> str:
     units (``voicevox.service``) come back as they are."""
     if not exe or "daemon" not in text:
         return text
-    p = Path(exe)
+    p = PurePosixPath(exe)  # a systemd unit: Linux paths, whatever runs this (the tests run anywhere)
     root = str(p.parents[2]) if p.parent.name == "bin" and p.parent.parent.name == ".venv" else "%h"
     lines = []
     for line in text.splitlines(keepends=True):
