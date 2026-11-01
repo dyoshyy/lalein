@@ -51,6 +51,12 @@ def restart_daemon_linux(run: Callable[..., Any] = subprocess.run) -> None:
         raise RuntimeError(str(e)) from e
     if r.returncode != 0:
         raise RuntimeError((r.stderr or r.stdout or f"exit {r.returncode}").strip())
+    from zundamon_jarvis.system import service
+
+    try:  # the on-screen character is no unit: restart it too, so it runs the new code (best effort)
+        run([service._find_ctl(), "character", "restart"], capture_output=True, text=True, timeout=RESTART_TIMEOUT_S)
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 def run_update(sys_: str, lang: str | None, **overrides: Any) -> tuple[int, str]:

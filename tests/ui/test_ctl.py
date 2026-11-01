@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -516,3 +517,41 @@ def test_status_json_is_not_translated(monkeypatch, capsys):
     assert json.loads(out.out) == {"state": "paused", "text": "Paused"}
     code, out, _ = run(monkeypatch, capsys, ["status"], error=FileNotFoundError())
     assert json.loads(out.out) == {"state": "off", "text": "Stopped"}
+
+
+def test_bare_character_command_starts_the_overlay(monkeypatch):
+    calls = []
+    monkeypatch.setattr(ctl, "_character_prefs", lambda args: None)
+    monkeypatch.setattr(ctl._character, "__defaults__", (None, None, lambda *a: calls.append(a)))  # execve
+    monkeypatch.setattr(ctl.platform, "system", lambda: "linux")
+    monkeypatch.setattr(ctl.Path, "exists", lambda self: True)
+    assert ctl.main(["character"]) == 0
+    assert calls and calls[0][1][1:3] == ["-m", "zundamon_jarvis.ui.character_app"]
+
+
+def test_character_restart_stops_the_old_overlay_and_starts_a_new_one(monkeypatch):
+    monkeypatch.setattr(ctl.platform, "system", lambda: "linux")
+    ran, spawned = [], []
+    gone = iter([0, 1])  # pkill matched; pgrep: still there once, then gone
+
+    def run(argv, **kw):
+        ran.append(argv[0])
+        rc = 0 if argv[0] == "pkill" else next(gone)
+        return subprocess.CompletedProcess(argv, rc)
+
+    monkeypatch.setattr(ctl.time, "sleep", lambda s: None)
+    assert ctl.restart_character(run, lambda cmd, **kw: spawned.append((cmd, kw))) == 0
+    assert ran == ["pkill", "pgrep", "pgrep"]
+    assert spawned[0][0][1:3] == ["-m", "zundamon_jarvis.ui.character_app"]
+    assert spawned[0][1]["start_new_session"] is True
+
+
+def test_character_restart_does_nothing_when_none_runs(monkeypatch):
+    monkeypatch.setattr(ctl.platform, "system", lambda: "linux")
+    spawned = []
+    run = lambda argv, **kw: subprocess.CompletedProcess(argv, 1)
+    assert ctl.restart_character(run, lambda *a, **k: spawned.append(a)) == 0
+    assert spawned == []
+    monkeypatch.setattr(ctl.platform, "system", lambda: "windows")
+    assert ctl.restart_character(lambda *a, **k: pytest.fail("no pkill off Linux"), None) == 0
+    assert ctl.main(["character", "restart"]) == 0

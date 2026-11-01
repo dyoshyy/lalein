@@ -53,7 +53,7 @@ from zundamon_jarvis.ui import desktop
 
 USAGE = ("zundamon-jarvisctl toggle|pause|resume|status|debug|get|bar|watch|settings"
          "|set speed|speaker|model|mic|language <value>|window [watch|settings]|character [state [look]]"
-         "|character hide|show|toggle|avatar <look>|monitor <connector>")
+         "|character hide|show|toggle|restart|avatar <look>|monitor <connector>")
 TEXT = {
     "usage": {"ja": "使い方: {usage}", "en": "usage: {usage}"},
     "tooltip": {"ja": "ずんだもんジャーヴィス: {state} — クリック: 会話、右クリック: 設定、{hotkey}: 一時停止/再開",
@@ -450,7 +450,7 @@ def character_command(preview: str | None = None, look: str | None = None) -> tu
     return [SYSTEM_PYTHON, "-m", "zundamon_jarvis.ui.character_app", *args], env
 
 
-def _character(preview: str | None, look: str | None = None, execve: Callable[..., Any] = os.execve) -> int:
+def _character(preview: str | None = None, look: str | None = None, execve: Callable[..., Any] = os.execve) -> int:
     sys_ = platform.system()
     if sys_ in ("windows", "mac"):  # drawn in this python (cairo / Quartz), no GTK needed
         import importlib
@@ -485,6 +485,28 @@ def spawn_character_toggle() -> None:
     threading.Thread(target=proc.wait, daemon=True).start()  # reap it
 
 
+CHARACTER_PATTERN = "zundamon_jarvis.ui.character_app"  # the overlay's `python -m` module, as pkill -f sees it
+
+
+def restart_character(run: Callable[..., Any] = subprocess.run, spawn: Callable[..., Any] = subprocess.Popen) -> int:
+    """Linux: stop the running overlay and start it again, so it runs the code on disk (the
+    daemon's restart does not reach it: it is no unit). Does nothing if none runs (hidden on
+    purpose, or no desktop). pkill never matches itself, and this process's own command line
+    (``... character restart``) does not contain the module name."""
+    if platform.system() != "linux":
+        return 0
+    if run(["pkill", "-f", CHARACTER_PATTERN]).returncode != 0:  # 1: nothing matched
+        return 0
+    for _ in range(50):  # wait for it to go (GTK keeps to one instance)
+        if run(["pgrep", "-f", CHARACTER_PATTERN], stdout=subprocess.DEVNULL).returncode != 0:
+            break
+        time.sleep(0.1)
+    cmd, extra = character_command()
+    spawn(cmd, env={**os.environ, **extra}, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+          stderr=subprocess.DEVNULL, start_new_session=True)
+    return 0
+
+
 def _character_prefs(args: list[str]) -> int | None:
     """``character hide|show|toggle|avatar <look>|monitor <connector>``, or None for other args."""
     from zundamon_jarvis.ui import character
@@ -517,6 +539,8 @@ def main(argv: list[str] | None = None) -> int:
         from zundamon_jarvis.ui.settings_app import main as settings_main
 
         return settings_main()
+    if args == ["character", "restart"]:
+        return restart_character()
     if args[:1] == ["character"] and (code := _character_prefs(args[1:])) is not None:
         return code
     if args[:1] == ["character"] and len(args) <= 3:
