@@ -601,6 +601,30 @@ async def test_a_quiet_room_is_not_digital_silence(parts):
     await task
 
 
+async def test_heartbeat_logs_input_level_and_vad_peak_each_minute(parts, caplog):
+    caplog.set_level("INFO")
+    calls, audio, vad, ep, orch, log = parts
+    now = [0.0]
+    d = make(parts, clock=lambda: now[0])
+    task = await started(d)
+    for _ in range(3):
+        audio.push(frame(0.2, level=0.004))
+    await settle(50)
+    assert "mic heartbeat" not in caplog.text
+    now[0] += 61
+    audio.push(frame(0.1, level=0.002))
+    await settle(50)
+    beats = [r.getMessage() for r in caplog.records if "mic heartbeat" in r.getMessage()]
+    assert len(beats) == 1
+    assert "4 frames" in beats[0] and "peak max 0.00400" in beats[0] and "vad max 0.20" in beats[0]
+    assert "in_speech=False" in beats[0] and "state=" in beats[0]
+    audio.push(frame())  # the next window starts empty
+    await settle(50)
+    assert len([r for r in caplog.records if "mic heartbeat" in r.getMessage()]) == 1
+    d.stop()
+    await task
+
+
 async def test_muted_ears_do_not_count_as_a_stalled_mic(parts):
     calls, audio, vad, ep, orch, log = parts
     d = make(parts)

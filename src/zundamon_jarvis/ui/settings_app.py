@@ -12,6 +12,9 @@ class ``zundamon-jarvis-settings``). Rows, ↑↓ to move, ←→ to change, Ent
 - Mic: the OS default input or one of the input devices (``pactl``). Saved to config.toml; the
   open stream keeps its device, so it applies when ZundamonJarvis restarts.
 - Pause / Resume: the same toggle as SUPER+ALT+J.
+- Restart / Update: restart the background service, or run
+  ``zundamon-jarvis update --yes`` (git pull + uv sync + restart). Enter twice: the first press
+  asks, the second runs it.
 - Language: 日本語 / English, the display language of this window, the menus and the setup
   (``zundamon_jarvis.core.i18n``; saved to config.toml). This window redraws in it at once; the
   menu bar / tray and the conversation window follow the next time they draw.
@@ -66,6 +69,7 @@ from zundamon_jarvis.core.config import (
 )
 from zundamon_jarvis.core.control import request as control_request
 from zundamon_jarvis.core.control import status_label
+from zundamon_jarvis.system.maintenance import restart_daemon_for, run_update, service_installed, version_text
 from zundamon_jarvis.voice.mics import (
     MicSource,
     cycle_mic,
@@ -96,6 +100,23 @@ TEXT = {
     "row.switch": {"ja": "今すぐ切り替え", "en": "Switch now"},
     "row.pause": {"ja": "一時停止 / 再開", "en": "Pause / Resume"},
     "row.language": {"ja": "表示言語", "en": "Language"},
+    "row.restart": {"ja": "再起動", "en": "Restart"},
+    "row.update": {"ja": "アップデート", "en": "Update"},
+    "restart.value": {"ja": "ZundamonJarvis を再起動", "en": "Restart ZundamonJarvis"},
+    "update.value": {"ja": "最新版に更新して再起動", "en": "Update to the latest and restart"},
+    "hint.restart": {"ja": "Enter を2回で実行（会話と聞き取りが数秒止まります）",
+                     "en": "Press Enter twice to run (listening stops for a few seconds)"},
+    "hint.update": {"ja": "Enter を2回で実行（git pull → uv sync → 再起動。数分かかることがあります）",
+                    "en": "Press Enter twice to run (git pull → uv sync → restart; may take minutes)"},
+    "maint.confirm": {"ja": "もう一度 Enter で実行します（別の行に動くと取り消し）",
+                      "en": "Press Enter again to run it (moving to another row cancels)"},
+    "maint.restarting": {"ja": "再起動しています…", "en": "Restarting…"},
+    "maint.updating": {"ja": "アップデートしています…（終わるまでこの窓を閉じないでください）",
+                       "en": "Updating… (keep this window open until it finishes)"},
+    "maint.restart_done": {"ja": "再起動しました", "en": "Restarted"},
+    "maint.restart_failed": {"ja": "再起動できませんでした: {error}", "en": "Couldn't restart: {error}"},
+    "maint.update_done": {"ja": "アップデートが終わりました\n{output}", "en": "The update is done\n{output}"},
+    "maint.update_failed": {"ja": "アップデートできませんでした\n{output}", "en": "The update failed\n{output}"},
     "switch.value": {"ja": "会話をリセット", "en": "Reset conversation"},
     "pause.paused": {"ja": "⏸ 一時停止中 — Enter で再開", "en": "⏸ Paused — Enter to resume"},
     "pause.listening": {"ja": "▶ 聞き取り中", "en": "▶ Listening"},
@@ -288,6 +309,10 @@ class Client(Protocol):
     def preview(self, speaker_id: int, speed: float, text: str) -> str | None: ...
     def toggle(self) -> tuple[View, str | None]: ...
     def new_session(self) -> tuple[View, str | None]: ...
+    def maintenance(self) -> bool: ...
+    def version(self) -> str: ...
+    def restart(self) -> str | None: ...
+    def update(self) -> str | None: ...
 
 
 _CONFIG_KEY = {"speed": "speed", "speaker": "speaker_id", "model": "model", "mic": "mic_device",
@@ -404,6 +429,38 @@ class SettingsClient:
             return view, None
         return view, _t(f"session.{session}", view.lang, model=model_label(view.model, view.lang))
 
+    def maintenance(self) -> bool:
+        """Whether the Restart / Update rows are offered: wherever the services are installed
+        (systemd unit, LaunchAgent, or the Windows login entry)."""
+        from zundamon_jarvis.core import platform
+
+        return service_installed(platform.system())
+
+    def version(self) -> str:
+        from zundamon_jarvis.system import update
+
+        return version_text(update.installed_version(), update.detect_install())
+
+    def restart(self) -> str | None:
+        """Restart the background service; the message to show (done or why not)."""
+        from zundamon_jarvis.core import platform
+
+        lang = self.language()
+        try:
+            restart_daemon_for(platform.system())()
+        except RuntimeError as e:
+            return _t("maint.restart_failed", lang, error=e)
+        return _t("maint.restart_done", lang)
+
+    def update(self) -> str | None:
+        """``zundamon-jarvis update --yes`` (restarts the service itself); the message to show."""
+        from zundamon_jarvis.core import platform
+
+        lang = self.language()
+        code, output = run_update(platform.system(), lang)
+        output = "\n".join(output.splitlines()[-4:])
+        return _t("maint.update_done" if code == 0 else "maint.update_failed", lang, output=output)
+
 
 # ---- the window ----
 
@@ -413,6 +470,8 @@ def _row(label: str, value: str) -> Text:
 
 
 ROWS = ("speed", "voice", "model", "mic", "switch", "pause", "language")
+MAINT_ROWS = ("restart", "update")  # after ROWS, when ``Client.maintenance()``
+
 
 CSS = """
 Screen { padding: 0 1; }
@@ -509,6 +568,9 @@ class SettingsApp(App):
         self._pending = 0  # changes sent, reply not back yet: polls don't overwrite them
         self._preview_timer: Timer | None = None
         self._message = ""
+        self._rows = ROWS + MAINT_ROWS if client.maintenance() else ROWS
+        self._version = ""  # loaded on mount (a git call)
+        self._armed: str | None = None  # a maintenance row that has had its first Enter
 
     # ---- layout ----
 
@@ -516,7 +578,7 @@ class SettingsApp(App):
         with Horizontal(id="top"):
             yield Static(_t("title", self.view.lang), id="title")
             yield Static("", id="status")
-        yield OptionList(*(Option(Text(""), id=r) for r in ROWS), id="rows")
+        yield OptionList(*(Option(Text(""), id=r) for r in self._rows), id="rows")
         yield Static("", id="hint")
         yield Static("", id="msg")
         yield Static(_t("keys", self.view.lang), id="keys")
@@ -534,6 +596,7 @@ class SettingsApp(App):
         self._render_all()
         self.run_worker(self._load_voices(), group="voices")
         self.run_worker(self._load_mics(), group="mics")
+        self.run_worker(self._load_version(), group="version")
         if self._poll_s > 0:
             self.set_interval(self._poll_s, self._poll)
 
@@ -550,6 +613,10 @@ class SettingsApp(App):
     async def _load_mics(self) -> None:
         self._mics = await self._call(self._client.mics)
         self._default_mic = await self._call(self._client.default_mic)
+        self._render_all()
+
+    async def _load_version(self) -> None:
+        self._version = await self._call(self._client.version)
         self._render_all()
 
     async def _poll(self) -> None:
@@ -571,7 +638,8 @@ class SettingsApp(App):
         else:
             status = _t("status.stopped", lang, note=_t("offline_note", lang))
         main = self._main
-        main.query_one("#title", Static).update(_t("title", lang))
+        main.query_one("#title", Static).update(
+            _t("title", lang) + (f"  v{self._version}" if self._version else ""))
         main.query_one("#keys", Static).update(_t("keys", lang))
         main.query_one("#status", Static).update(status)
         rows = main.query_one("#rows", OptionList)
@@ -585,9 +653,11 @@ class SettingsApp(App):
                           _t("pause.paused", lang) if v.paused else _t("pause.listening", lang)
                           if v.online else "—"),
             "language": _row(_t("row.language", lang), f"◂ {LANGUAGE_LABEL.get(lang, lang)} ▸"),
+            "restart": _row(_t("row.restart", lang), _t("restart.value", lang)),
+            "update": _row(_t("row.update", lang), _t("update.value", lang)),
         }
-        for rid, prompt in values.items():
-            rows.replace_option_prompt(rid, prompt)
+        for rid in self._rows:
+            rows.replace_option_prompt(rid, values[rid])
         self._render_hint()
 
     def _render_hint(self) -> None:
@@ -598,7 +668,7 @@ class SettingsApp(App):
             hint = mic_note(self.view, self._default_mic, lang)
         elif row == "speed":
             hint = _t("hint.speed", lang, min=f"{SPEED_MIN:.1f}", max=f"{SPEED_MAX:.1f}")
-        elif row in ("voice", "switch", "pause", "language"):
+        elif row in ("voice", "switch", "pause", "language", "restart", "update"):
             hint = _t(f"hint.{row}", lang)
         else:
             hint = ""
@@ -620,6 +690,8 @@ class SettingsApp(App):
 
     def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
         if event.option_list.id == "rows":
+            if self._armed != event.option.id:
+                self._armed = None
             self._render_hint()
 
     async def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
@@ -636,6 +708,27 @@ class SettingsApp(App):
             self.view, msg = await self._call(self._client.new_session)
             self._render_all()
             self._say(msg)
+        elif row in MAINT_ROWS:
+            await self._maintain(row)
+
+    async def _maintain(self, row: str) -> None:
+        """Restart / Update: the first Enter asks, the second runs it."""
+        if self._armed != row:
+            self._armed = row
+            self._say(_t("maint.confirm", self.lang))
+            return
+        self._armed = None
+        self._say(_t("maint.restarting" if row == "restart" else "maint.updating", self.lang))
+        self._pending += 1  # the polls would only show the service going down and up
+        try:
+            msg = await self._call(self._client.restart if row == "restart" else self._client.update)
+            view = await self._call(self._client.load)
+        finally:
+            self._pending -= 1
+        if not self._pending:
+            self.view = view
+            self._render_all()
+        self._say(msg)
 
     async def action_adjust(self, delta: int) -> None:
         if isinstance(self.screen, VoiceScreen):
