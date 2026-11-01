@@ -1026,7 +1026,8 @@ def test_restart_daemon_linux_runs_systemctl_and_reports_errors():
         return subprocess.CompletedProcess(argv, 0, "", "")
 
     setup_gui.restart_daemon_linux(ok)
-    assert calls == [["systemctl", "--user", "restart", "zundamon-jarvis.service"]]
+    assert calls[0] == ["systemctl", "--user", "restart", "zundamon-jarvis.service"]
+    assert calls[1][1:] == ["character", "restart"]  # the on-screen character follows
     with pytest.raises(RuntimeError, match="not loaded"):
         setup_gui.restart_daemon_linux(lambda argv, **kw: subprocess.CompletedProcess(argv, 5, "", "not loaded"))
 
@@ -1053,7 +1054,8 @@ def test_run_update_on_a_git_checkout_pulls_syncs_and_restarts(tmp_path, monkeyp
         find_uv=lambda: "/bin/uv", find_exe=lambda s: "/bin/zj", uid=lambda: 1000)
     assert code == 0
     assert ran == [["git", "pull", "--ff-only"], ["/bin/uv", "sync"],
-                   ["systemctl", "--user", "try-restart", "zundamon-jarvis.service"]]
+                   ["systemctl", "--user", "try-restart", "zundamon-jarvis.service"],
+                   ["/bin/zundamon-jarvisctl", "character", "restart"]]
     assert "$ git pull --ff-only" in out
 
 

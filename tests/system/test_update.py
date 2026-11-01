@@ -369,7 +369,8 @@ def test_git_refusal(tmp_path):
 def test_git_steps_per_os():
     linux = [s.argv for s in update.git_steps("linux", "uv", "zj")]
     assert linux == [["git", "pull", "--ff-only"], ["uv", "sync"],
-                     ["systemctl", "--user", "try-restart", "zundamon-jarvis.service"]]
+                     ["systemctl", "--user", "try-restart", "zundamon-jarvis.service"],
+                     ["zundamon-jarvisctl", "character", "restart"]]
     mac = [s.argv for s in update.git_steps("mac", "uv", "zj", 501)]
     assert mac[2:] == [["launchctl", "kickstart", "-k", "gui/501/dev.zundamon-jarvis.daemon"],
                        ["launchctl", "kickstart", "-k", "gui/501/dev.zundamon-jarvis.menubar"]]
@@ -528,8 +529,9 @@ def test_git_check_and_update(tmp_path):
     assert "origin/main has 2 new commit(s)." in w.out and not w.ran
     w2 = World(tmp_path, kind="git", system="linux")
     assert w2.main("--yes") == 0
-    assert w2.ran == [["git", "pull", "--ff-only"], ["/u/uv", "sync"],
-                      ["systemctl", "--user", "try-restart", "zundamon-jarvis.service"]]
+    assert w2.ran[:3] == [["git", "pull", "--ff-only"], ["/u/uv", "sync"],
+                          ["systemctl", "--user", "try-restart", "zundamon-jarvis.service"]]
+    assert w2.ran[3][1:] == ["character", "restart"]
     assert "Updated, and the service was restarted." in w2.out
 
 

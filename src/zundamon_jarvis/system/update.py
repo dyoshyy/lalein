@@ -534,7 +534,9 @@ def git_steps(sys_: str, uv: str, exe: str, uid: int = 0) -> list[Step]:
         post = [Step(["launchctl", "kickstart", "-k", f"gui/{uid}/{label}"], required=False)
                 for label in reversed(MAC_LABELS)]
     else:
-        post = [Step(["systemctl", "--user", "try-restart", "zundamon-jarvis.service"], required=False)]
+        ctl = str(Path(exe).with_name("zundamon-jarvisctl"))  # the character is no unit: restart it too
+        post = [Step(["systemctl", "--user", "try-restart", "zundamon-jarvis.service"], required=False),
+                Step([ctl, "character", "restart"], required=False)]
     return [*pre, Step(["git", "pull", "--ff-only"]), Step([uv, "sync"]), *post]
 
 
