@@ -166,8 +166,8 @@ TEXT = {
     "no_voicevox": {"ja": "VOICEVOX に接続できないため、声の一覧を出せません",
                     "en": "Cannot reach VOICEVOX, so the voice list is unavailable"},
     # spoken by the voice being tried, in the window's language
-    "sample.speed": {"ja": "このくらいの速さで話すのだ。", "en": "This is how fast I will talk."},
-    "sample.voice": {"ja": "この声で話すのだ。", "en": "This is the voice I will use."},
+    "sample.speed": {"ja": "このくらいの速さで話します。", "en": "This is how fast I will talk."},
+    "sample.voice": {"ja": "この声で話します。", "en": "This is the voice I will use."},
 }
 
 
