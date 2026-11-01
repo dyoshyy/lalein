@@ -520,6 +520,41 @@
     next: () => [true, ""],
   };
 
+  // The maintenance buttons (Linux's systemd install only): restart the service, update the app.
+  // The server runs one action at a time; the state tells which one and how it went.
+  function maintView() {
+    const box = el("div", { class: "maint", hidden: true });
+    const restart = el("button", { class: "btn btn-small", type: "button", text: t("maint.restart"),
+      onclick: () => { if (window.confirm(t("maint.restart_confirm"))) send("/api/maint/restart"); } });
+    const update = el("button", { class: "btn btn-small", type: "button", text: t("maint.update"),
+      onclick: () => { if (window.confirm(t("maint.update_confirm"))) send("/api/maint/update"); } });
+    const progress = el("p");
+    const progressBar = bar();
+    const result = el("div");
+    box.append(el("h3", { text: t("maint.title") }), el("p", { class: "small", text: t("maint.about") }),
+      el("div", { class: "row" }, restart, update), progress, progressBar, result);
+    let shown = null;
+    return {
+      node: box,
+      refresh() {
+        const m = S.maint;
+        box.hidden = !m.available;
+        if (!m.available) return;
+        const running = m.state === "running";
+        restart.disabled = update.disabled = running || S.start.state === "running";
+        progressBar.hidden = !running;
+        setBar(progressBar, null);
+        progress.textContent = running ? t(m.action === "update" ? "maint.updating" : "maint.restarting") : "";
+        const key = JSON.stringify([m.state, m.message]);
+        if (key === shown) return;
+        shown = key;
+        result.replaceChildren();
+        if (m.state === "done") result.append(banner("ok", el("p", { class: "pre-line", text: m.message })));
+        if (m.state === "error") result.append(banner("err", el("p", { class: "pre-line", text: m.message })));
+      },
+    };
+  }
+
   const STAGE_TEXT = { install: "start.install", wait: "start.wait" };
 
   const startStep = {
@@ -543,10 +578,12 @@
       this.progress = el("p");
       this.bar = bar();
       this.result = el("div");
-      body.append(this.ready, this.goRow, this.progress, this.bar, this.result);
+      this.maint = maintView();
+      body.append(this.ready, this.goRow, this.progress, this.bar, this.result, this.maint.node);
     },
     update() {
       const st = S.start;
+      this.maint.refresh();
       const waitingFor = [];
       if (!prereqDone()) waitingFor.push("downloads");
       if (!loginOk()) waitingFor.push("login");
@@ -624,6 +661,8 @@
       this.closeBtn = el("button", { class: "btn btn-primary", type: "button", text: t("done.close"),
         onclick: () => this.finish() });
       body.append(el("div", { class: "row" }, this.closeBtn));
+      this.maint = maintView();
+      body.append(this.maint.node);
     },
     async finish() {
       this.closeBtn.disabled = true;
@@ -644,7 +683,9 @@
       $("next").hidden = true;
       $("nav-hint").textContent = "";
     },
-    update() {},
+    update() {
+      this.maint.refresh();
+    },
     next: () => [false, ""],
   };
 

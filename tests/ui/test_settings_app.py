@@ -203,7 +203,8 @@ def test_client_language_online_and_offline(tmp_path):
 # ---- the app (Textual Pilot) ----
 
 class FakeClient:
-    def __init__(self, online=True, lang="en"):
+    def __init__(self, online=True, lang="en", maint=False):
+        self.maint = maint
         self.view = sa.View(online=online, state="listening", state_text="Listening",
                             speed=1.2, speaker_id=13, model="sonnet", lang=lang)
         self.calls = []
@@ -241,6 +242,20 @@ class FakeClient:
     def new_session(self):
         self.calls.append(("newsession",))
         return self.view, "Conversation reset"
+
+    def maintenance(self):
+        return self.maint
+
+    def version(self):
+        return "0.2.0 (git abc1234)"
+
+    def restart(self):
+        self.calls.append(("restart",))
+        return "Restarted"
+
+    def update(self):
+        self.calls.append(("update",))
+        return "The update is done"
 
 
 async def test_app_smoke_speed_voice_model_pause_and_close():
@@ -317,7 +332,7 @@ async def test_app_language_row_redraws_the_window_at_once():
     app = sa.SettingsApp(client, preview_delay=0.05)
     async with app.run_test(size=(70, 24)) as pilot:
         await pilot.pause()
-        assert _shown(app, "#title") == "ZundamonJarvis 設定" and "閉じる" in _shown(app, "#keys")
+        assert _shown(app, "#title").startswith("ZundamonJarvis 設定") and "閉じる" in _shown(app, "#keys")
         assert "聞き取り中" in _shown(app, "#status")
         rows = app.query_one("#rows")
         rows.highlighted = sa.ROWS.index("language")
@@ -327,7 +342,7 @@ async def test_app_language_row_redraws_the_window_at_once():
         await pilot.press("right")
         await pilot.pause()
         assert ("set", "language", "en") in client.calls
-        assert _shown(app, "#title") == "ZundamonJarvis Settings" and "Close" in _shown(app, "#keys")
+        assert _shown(app, "#title").startswith("ZundamonJarvis Settings") and "Close" in _shown(app, "#keys")
         assert "Listening" in _shown(app, "#status")
         assert "English" in str(rows.get_option("language").prompt)
         assert "Voice speed" in str(rows.get_option("speed").prompt)
@@ -357,3 +372,60 @@ async def test_polls_and_messages_while_the_voice_list_is_open_do_not_break_it()
 def test_view_from_a_garbled_reply_keeps_defaults():
     v = sa.View.from_reply({"state": "listening", "settings": {"speed": None, "speaker_id": "x"}})
     assert v.speed == 1.2 and v.speaker_id is None
+
+
+async def test_restart_and_update_rows_need_two_enters_and_only_show_when_offered():
+    plain = sa.SettingsApp(FakeClient(), preview_delay=0.05)
+    async with plain.run_test(size=(70, 24)) as pilot:
+        await pilot.pause()
+        assert [o.id for o in plain.query_one("#rows").options] == list(sa.ROWS)
+
+    client = FakeClient(maint=True)
+    app = sa.SettingsApp(client, preview_delay=0.05)
+    async with app.run_test(size=(70, 24)) as pilot:
+        await pilot.pause()
+        rows = app.query_one("#rows")
+        assert [o.id for o in rows.options] == list(sa.ROWS + sa.MAINT_ROWS)
+        rows.highlighted = rows.get_option_index("restart")
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert ("restart",) not in client.calls and "Enter again" in _shown(app, "#msg")
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert ("restart",) in client.calls and _shown(app, "#msg") == "Restarted"
+        # moving to another row cancels the first press
+        rows.highlighted = rows.get_option_index("update")
+        await pilot.pause()
+        await pilot.press("enter")
+        rows.highlighted = rows.get_option_index("restart")
+        rows.highlighted = rows.get_option_index("update")
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert ("update",) not in client.calls
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert ("update",) in client.calls and "update is done" in _shown(app, "#msg")
+
+
+async def test_the_title_shows_the_running_version():
+    app = sa.SettingsApp(FakeClient(lang="en"), preview_delay=0.05)
+    async with app.run_test(size=(70, 24)) as pilot:
+        await pilot.pause(0.1)
+        assert _shown(app, "#title") == "ZundamonJarvis Settings  v0.2.0 (git abc1234)"
+
+
+def test_version_text_and_service_installed(tmp_path):
+    from zundamon_jarvis.system.update import Install
+
+    assert sa.version_text("0.2.0", Install("uv-tool", tmp_path)) == "0.2.0"
+    assert sa.version_text(None, Install("unknown")) == "?"
+    assert sa.version_text("0.2.0", Install("git", tmp_path)) == "0.2.0 (git)"  # not a repo: no commit
+    assert not sa.service_installed("linux", tmp_path) and not sa.service_installed("mac", tmp_path)
+    (tmp_path / ".config/systemd/user").mkdir(parents=True)
+    (tmp_path / ".config/systemd/user/zundamon-jarvis.service").write_text("")
+    assert sa.service_installed("linux", tmp_path)
+    (tmp_path / "Library/LaunchAgents").mkdir(parents=True)
+    (tmp_path / "Library/LaunchAgents/dev.zundamon-jarvis.daemon.plist").write_text("")
+    assert sa.service_installed("mac", tmp_path)

@@ -99,6 +99,12 @@ class World:
         self.levels = [0.0, 0.25, 0.1]
         self.mic_fails = False
         self.picked = "/picked/folder"
+        self.restarts = 0
+        self.restart_error = None
+        self.updates = []
+        self.update_result = (0, "Already up to date.")
+        self.maint_gate = threading.Event()
+        self.maint_gate.set()
 
     def install_engine(self, progress):
         self.engine_gate.wait(5)
@@ -149,7 +155,19 @@ class World:
         status = {"state": self.daemon_state, "text": "Listening"}
         return {**status, "debug": dict(self.debug)} if cmd == "debug" else status
 
-    def deps(self, picker=True):
+    def restart_daemon(self):
+        self.maint_gate.wait(5)
+        if self.restart_error:
+            raise self.restart_error
+        self.restarts += 1
+        self.running = True
+
+    def update_app(self, lang):
+        self.maint_gate.wait(5)
+        self.updates.append(lang)
+        return self.update_result
+
+    def deps(self, picker=True, maint=False):
         async def no_sleep(_s):
             await asyncio.sleep(0)
 
@@ -161,7 +179,9 @@ class World:
             default_mic=lambda: "builtin",
             engine_installed=lambda: self.engine_there, install_engine=self.install_engine,
             model_installed=lambda: self.model_there, download_model=self.download_model,
-            pick_folder=(lambda: self.picked) if picker else None, sleep=no_sleep)
+            pick_folder=(lambda: self.picked) if picker else None, sleep=no_sleep,
+            restart_daemon=self.restart_daemon if maint else None,
+            update_app=self.update_app if maint else None)
 
 
 @pytest.fixture(autouse=True)
@@ -188,13 +208,13 @@ class Clock:
 def make(tmp_path, world):
     made = []
 
-    def _make(system="mac", picker=True, config_text=None, clock=None):
+    def _make(system="mac", picker=True, config_text=None, clock=None, maint=False):
         path = tmp_path / "config.toml"
         if config_text is not None:
             path.write_text(config_text)
         cfg, problem = setup_wizard.read_config(path)
         assert problem is None
-        s = SetupSession(world.deps(picker), cfg, path, system, **({"clock": clock} if clock else {}))
+        s = SetupSession(world.deps(picker, maint), cfg, path, system, **({"clock": clock} if clock else {}))
         made.append(s)
         s.open()
         return s
@@ -916,3 +936,162 @@ def test_start_in_english(make, world):
     s.start_services()
     wait_until(lambda: s.start.state == "error")
     assert s.snapshot()["start"]["message"].startswith("Couldn't set up the background service (disk full)")
+
+
+# ---- maintenance: restart / update ----
+
+def post(app, path):
+    return handle(app, req("POST", path, body={}))
+
+
+def test_maintenance_is_not_offered_without_the_linux_deps(make):
+    s = make("mac")
+    assert s.snapshot()["maint"]["available"] is False
+    app = App(s, TOKEN, port=4321)
+    for path in ("/api/maint/restart", "/api/maint/update"):
+        r = post(app, path)
+        assert r.status == 409 and "使えません" in json.loads(r.body)["error"]
+
+
+def test_default_deps_offer_maintenance_on_every_os():
+    for sys_, fn in (("linux", setup_gui.restart_daemon_linux), ("mac", setup_gui.restart_daemon_mac),
+                     ("windows", setup_gui.restart_daemon_windows)):
+        d = setup_gui.default_deps(sys_)
+        assert d.restart_daemon is fn and d.update_app is not None
+
+
+def test_restart_runs_and_waits_for_the_daemon(make, world):
+    s = make("linux", maint=True)
+    assert s.snapshot()["maint"]["available"] is True
+    s.restart_service()
+    wait_until(lambda: s.maint.state == "done")
+    assert world.restarts == 1 and world.updates == []
+    assert "Listening" in s.maint.message or "聞き取り中" in s.maint.message
+    assert s.started  # setup will not resume the old daemon
+
+
+def test_restart_failure_is_shown_and_can_be_retried(make, world):
+    world.restart_error = RuntimeError("Unit not found")
+    s = make("linux", maint=True)
+    s.restart_service()
+    wait_until(lambda: s.maint.state == "error")
+    assert "再起動できませんでした: Unit not found" == s.snapshot()["maint"]["message"]
+    world.restart_error = None
+    s.restart_service()
+    wait_until(lambda: s.maint.state == "done")
+
+
+def test_a_second_press_is_refused_while_one_runs(make, world):
+    world.maint_gate.clear()
+    s = make("linux", maint=True)
+    app = App(s, TOKEN, port=4321)
+    assert post(app, "/api/maint/update").status == 200
+    snap = s.snapshot()["maint"]
+    assert snap["state"] == "running" and snap["action"] == "update"
+    for path in ("/api/maint/update", "/api/maint/restart"):
+        r = post(app, path)
+        assert r.status == 409 and "実行中" in json.loads(r.body)["error"]
+    world.maint_gate.set()
+    wait_until(lambda: s.maint.state == "done")
+    assert world.updates == ["ja"] and world.restarts == 0
+
+
+def test_update_shows_the_output_and_failures(make, world):
+    world.update_result = (0, "$ git pull --ff-only\nUpdating abc..def")
+    s = make("linux", maint=True, config_text='language = "en"\n')
+    s.update_app()
+    wait_until(lambda: s.maint.state == "done")
+    assert s.maint.message.startswith("The update is done.") and "Updating abc..def" in s.maint.message
+    world.update_result = (1, "git failed")
+    s.update_app()
+    wait_until(lambda: s.maint.state == "error")
+    assert s.maint.message == "The update failed.\ngit failed"
+    assert world.updates == ["en", "en"]
+
+
+def test_maintenance_needs_the_same_protections_as_other_posts(make):
+    app = App(make("linux", maint=True), TOKEN, port=4321)
+    for path in ("/api/maint/restart", "/api/maint/update"):
+        assert handle(app, req("POST", path, body={}, cookie=False)).status == 403
+        assert handle(app, req("POST", path, body={}, headers={"origin": "http://evil.example"})).status == 403
+        assert handle(app, req("POST", path, body=b"{}", ctype="text/plain")).status == 415
+    assert app.session.maint.state == "idle"
+
+
+def test_restart_daemon_linux_runs_systemctl_and_reports_errors():
+    calls = []
+
+    def ok(argv, **kw):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    setup_gui.restart_daemon_linux(ok)
+    assert calls == [["systemctl", "--user", "restart", "zundamon-jarvis.service"]]
+    with pytest.raises(RuntimeError, match="not loaded"):
+        setup_gui.restart_daemon_linux(lambda argv, **kw: subprocess.CompletedProcess(argv, 5, "", "not loaded"))
+
+
+def test_run_update_on_a_git_checkout_pulls_syncs_and_restarts(tmp_path, monkeypatch):
+    from zundamon_jarvis.system import update as upd
+
+    ran = []
+
+    def git(argv, cwd):
+        out = {"--abbrev-ref": "main", "--count": "2", "status": "", "fetch": ""}
+        key = next((k for k in out if k in argv), None)
+        if argv[:2] == ["git", "rev-parse"] and "@{u}" in argv:
+            return 0, "origin/main"
+        return 0, out.get(key, "")
+
+    def fake_run(argv, **kw):
+        ran.append(argv)
+        return subprocess.CompletedProcess(argv, 0, "ok\n", "")
+
+    monkeypatch.setattr(setup_gui.subprocess, "run", fake_run)
+    code, out = setup_gui.run_update(
+        "linux", "en", install=lambda: upd.Install("git", tmp_path), git=git,
+        find_uv=lambda: "/bin/uv", find_exe=lambda s: "/bin/zj", uid=lambda: 1000)
+    assert code == 0
+    assert ran == [["git", "pull", "--ff-only"], ["/bin/uv", "sync"],
+                   ["systemctl", "--user", "try-restart", "zundamon-jarvis.service"]]
+    assert "$ git pull --ff-only" in out
+
+
+def test_run_update_refuses_a_dirty_checkout_without_running_anything(tmp_path, monkeypatch):
+    from zundamon_jarvis.system import update as upd
+
+    monkeypatch.setattr(setup_gui.subprocess, "run", lambda *a, **k: pytest.fail("must not run"))
+
+    def git(argv, cwd):
+        if "--porcelain" in argv:
+            return 0, " M file.py"
+        if "@{u}" in argv:
+            return 0, "origin/main"
+        return 0, "2" if "--count" in argv else "main"
+
+    code, out = setup_gui.run_update("linux", "en", install=lambda: upd.Install("git", tmp_path), git=git,
+                                     find_uv=lambda: "/bin/uv")
+    assert code == 2 and out
+
+
+def test_restart_daemon_mac_kickstarts_the_agent_and_reports_failure():
+    calls = []
+
+    class R:
+        def __init__(self, code, err=""):
+            self.returncode, self.stderr, self.stdout = code, err, ""
+
+    def ok(argv, **kw):
+        calls.append(argv)
+        return R(0)
+
+    setup_gui.restart_daemon_mac(ok, uid=501)
+    assert calls == [["launchctl", "kickstart", "-k", "gui/501/dev.zundamon-jarvis.daemon"]]
+    with pytest.raises(RuntimeError, match="not loaded"):
+        setup_gui.restart_daemon_mac(lambda argv, **kw: R(113, "not loaded"), uid=501)
+
+
+def test_restart_daemon_for_picks_the_os():
+    assert setup_gui.restart_daemon_for("mac") is setup_gui.restart_daemon_mac
+    assert setup_gui.restart_daemon_for("windows") is setup_gui.restart_daemon_windows
+    assert setup_gui.restart_daemon_for("linux") is setup_gui.restart_daemon_linux

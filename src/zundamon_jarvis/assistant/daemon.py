@@ -75,6 +75,7 @@ SAMPLE_RATE = 16000
 TTS_RETRY_S = 30.0
 TTS_RESOLVE_RETRY_S = 2.0
 HALF_DUPLEX_TAIL_S = 0.3  # half duplex: the mic stays muted this long after speaking (echo tail)
+HEARTBEAT_S = 60.0  # while listening: one INFO line this often with the input level and VAD peak
 STUCK_WARN_S = 30.0  # in speech / user_talking this long -> one WARNING per episode
 
 
@@ -156,6 +157,8 @@ class Daemon:
         self._talking_since: float | None = None  # orchestrator user_talking became True
         self._warned_speech = self._warned_talking = False
         self._rlog = RateLimitedLog(log, clock=clock)
+        self._hb_start = clock()
+        self._hb_frames, self._hb_peak, self._hb_prob = 0, 0.0, 0.0
 
         self.paused = False
         self.started = asyncio.Event()
@@ -412,6 +415,7 @@ class Daemon:
                 self._frames_seen.add(1.0)
                 self._check_stuck()
                 await self._process(frame)
+                self._heartbeat(frame)
                 if self.paused:
                     return
         finally:
@@ -459,6 +463,7 @@ class Daemon:
             return
         prob = self._vad.prob(frame)
         self._probs.add(prob)
+        self._hb_prob = max(self._hb_prob, prob)
         for ev in self._endpointer.feed(frame, prob):
             if isinstance(ev, SpeechStarted):
                 self._set_hearing(True)
@@ -481,6 +486,22 @@ class Daemon:
                     self._rlog(logging.INFO, "utterance", "utterance %.1f s", seconds)
                 self._spawn(self._orch.on_utterance(ev.audio))
                 await asyncio.sleep(0)  # its synchronous start runs before the next frame
+
+    def _heartbeat(self, frame: Any) -> None:
+        """A line a minute with what the ears got: frames, loudest sample, VAD peak. When the
+        assistant goes deaf with no error, this shows whether the input was dead (level ~0),
+        live but the VAD stayed low, or a deliberate mute / state held the frames back."""
+        self._hb_frames += 1
+        self._hb_peak = max(self._hb_peak, float(np.max(np.abs(frame))) if len(frame) else 0.0)
+        now = self._clock()
+        if now - self._hb_start < HEARTBEAT_S:
+            return
+        log.info("mic heartbeat: %d frames in %.0f s, peak max %.5f, vad max %.2f, state=%s "
+                 "in_speech=%s user_talking=%s deaf=%s half_muted=%s",
+                 self._hb_frames, now - self._hb_start, self._hb_peak, self._hb_prob,
+                 self._orch.state, self._endpointer.in_speech, self._orch.user_talking,
+                 self._deaf, self._half_muted)
+        self._hb_start, self._hb_frames, self._hb_peak, self._hb_prob = now, 0, 0.0, 0.0
 
     def _check_stuck(self) -> None:
         now = self._clock()

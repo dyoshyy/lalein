@@ -208,6 +208,8 @@ pre.mono {
 .banner-err { background: var(--err-bg); color: var(--err-text); }
 .banner-ok { background: var(--green-soft); color: var(--text); }
 .banner p { margin: 4px 0; }
+.maint { margin-top: 24px; padding-top: 8px; border-top: 1px solid var(--line, rgba(128,128,128,.3)); }
+.maint h3 { font-size: 15px; margin: 8px 0 4px; }
 .pre-line { white-space: pre-line; }
 
 .btn {

@@ -43,6 +43,7 @@ import http.cookies
 import json
 import logging
 import math
+import os
 import secrets
 import subprocess
 import sys
@@ -61,6 +62,13 @@ from zundamon_jarvis.core import i18n, platform
 from zundamon_jarvis.core.config import LANGUAGES, MODELS, SPEED_MAX, SPEED_MIN, Config, update_config, valid_speed
 from zundamon_jarvis.core.control import status_label
 from zundamon_jarvis.setup import wizard as wiz
+from zundamon_jarvis.system.maintenance import (  # noqa: F401  (re-exported: the tests use these here)
+    restart_daemon_for,
+    restart_daemon_linux,
+    restart_daemon_mac,
+    restart_daemon_windows,
+    run_update,
+)
 from zundamon_jarvis.voice.tts import talk_styles
 
 log = logging.getLogger(__name__)
@@ -98,6 +106,16 @@ TEXT = {
     "downloads_first": {"ja": "声のエンジンと文字起こしのモデルの準備が終わってから起動できます。",
                         "en": "You can start once the voice engine and the speech model are ready."},
     "cannot_check": {"ja": "いまは確かめられません。", "en": "Can't check right now."},
+    "maint_unavailable": {"ja": "この環境では使えません（Linux の systemd 版だけです）。",
+                          "en": "Not available here (only the Linux systemd install)."},
+    "maint_busy": {"ja": "いま別の操作を実行中です。終わるまで待ってください。",
+                   "en": "Another action is running. Wait for it to finish."},
+    "restart_failed": {"ja": "再起動できませんでした: {error}", "en": "Couldn't restart: {error}"},
+    "restart_done": {"ja": "再起動しました（今: {status}）", "en": "Restarted (now: {status})"},
+    "restart_pending": {"ja": "再起動を指示しました。まだ応答がありません。少し待ってから確かめてください。",
+                        "en": "Restart requested, but it isn't answering yet. Wait a moment and check again."},
+    "update_failed": {"ja": "アップデートできませんでした。\n{output}", "en": "The update failed.\n{output}"},
+    "update_done": {"ja": "アップデートが終わりました。\n{output}", "en": "The update is done.\n{output}"},
     "denied": {"ja": "このページは開けません。ターミナルに出ている URL をそのまま開いてください。",
                "en": "This page can't be opened. Open the exact URL shown in the terminal."},
     "window_title": {"ja": "ずんだもんジャーヴィスの設定", "en": "ZundamonJarvis Setup"},
@@ -135,6 +153,9 @@ class Deps:
     download_model: Callable[[Callable[[int, int | None], None]], Any]  # (progress)
     pick_folder: Callable[[], str | None] | None = None  # None: no native dialog (no tkinter)
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
+    # The maintenance buttons (Linux systemd only; None: not offered).
+    restart_daemon: Callable[[], None] | None = None  # raises when it fails
+    update_app: Callable[[str | None], tuple[int, str]] | None = None  # (lang) -> (exit code, output)
 
 
 def _model_installed(sys_: str) -> bool:
@@ -201,6 +222,8 @@ def default_deps(sys_: str) -> Deps:
         model_installed=lambda: _model_installed(sys_),
         download_model=lambda progress: stt.download_model(sys_, progress=progress),
         pick_folder=tk_folder_picker(),
+        restart_daemon=restart_daemon_for(sys_),
+        update_app=lambda lang: run_update(sys_, lang),
     )
 
 
@@ -250,6 +273,13 @@ class _Start:
     daemon_mic: str | None = None  # checking | ok | silent | unknown
 
 
+@dataclass
+class _Maint:
+    action: str | None = None  # restart | update
+    state: str = "idle"  # idle | running | done | error
+    message: str | None = None
+
+
 class SetupSession:
     def __init__(self, deps: Deps, cfg: Config, config_path: Path, system: str,
                  clock: Callable[[], float] = time.monotonic) -> None:
@@ -276,6 +306,7 @@ class SetupSession:
         self._voice_stack: contextlib.AsyncExitStack | None = None
         self._voice_task: asyncio.Task | None = None
         self.start = _Start()
+        self.maint = _Maint()
         self.paused = False
         self.started = False
         self.finished = threading.Event()
@@ -716,6 +747,51 @@ class SetupSession:
             self.start.daemon_mic = "checking"
         self._spawn(self._daemon_mic())
 
+    # -- maintenance: restart / update the background service (Linux) --
+
+    def _maint_begin(self, action: str, fn: Any) -> None:
+        with self._lock:
+            if fn is None:
+                raise Refused(self.t("maint_unavailable"))
+            if self.maint.state == "running" or self.start.state == "running":
+                raise Refused(self.t("maint_busy"))
+            self.maint = _Maint(action, "running")
+        self._spawn(self._maint(action))
+
+    def restart_service(self) -> None:
+        self._maint_begin("restart", self.deps.restart_daemon)
+
+    def update_app(self) -> None:
+        self._maint_begin("update", self.deps.update_app)
+
+    async def _maint(self, action: str) -> None:
+        def finish(state: str, message: str) -> None:
+            with self._lock:
+                self.maint = _Maint(action, state, message)
+
+        await self._release()  # the daemon opens the mic and VOICEVOX's port itself
+        output = ""
+        try:
+            if action == "restart":
+                await asyncio.to_thread(self.deps.restart_daemon)
+            else:
+                code, output = await asyncio.to_thread(self.deps.update_app, self.lang)
+                if code != 0:
+                    finish("error", self.t("update_failed", output=output))
+                    return
+        except Exception as e:
+            log.warning("%s failed", action, exc_info=True)
+            finish("error", self.t("restart_failed", error=e) if action == "restart"
+                   else self.t("update_failed", output=e))
+            return
+        self.started = True  # the daemon was restarted: setup must not resume the old one
+        status = await wiz.wait_for_status(self.deps.request, self.deps.sleep)
+        shown = status_label(status, self.lang) if status and "text" in status else None
+        if action == "restart":
+            finish("done", self.t("restart_done", status=shown) if shown else self.t("restart_pending"))
+        else:
+            finish("done", self.t("update_done", output=output))
+
     async def _release(self) -> None:
         await self._mic_cancel()
         await self._voice_close()
@@ -759,6 +835,10 @@ class SetupSession:
                     "daemon_mic_text": (wiz.daemon_mic_text(
                         self.sys, "ask" if daemon_mic == "checking" else daemon_mic, lang)
                         if daemon_mic else None),
+                },
+                "maint": {
+                    "available": self.deps.restart_daemon is not None and self.deps.update_app is not None,
+                    "action": self.maint.action, "state": self.maint.state, "message": self.maint.message,
                 },
                 "finished": self.finished.is_set(),
             }
@@ -946,6 +1026,8 @@ ROUTES: dict[str, Callable[[App, dict], dict | None]] = {
     "/api/start": lambda app, d: app.session.start_services(),
     "/api/daemon-mic/check": lambda app, d: app.session.recheck_daemon_mic(),
     "/api/language": lambda app, d: app.session.set_language(d.get("language")),
+    "/api/maint/restart": lambda app, d: app.session.restart_service(),
+    "/api/maint/update": lambda app, d: app.session.update_app(),
     "/api/bye": _bye,
     "/api/finish": _finish,
 }

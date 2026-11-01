@@ -134,5 +134,13 @@
   "done.bubble": {"ja": "これからよろしくなのだ！話しかけてみてほしいのだ", "en": "Nice to meet you! Go ahead, talk to me!"},
   "done.try": {"ja": "ふつうの声で話しかけてみてください（例: 「今日は何曜日？」）。", "en": "Just talk in your normal voice (try “What day is it today?”)."},
   "done.close": {"ja": "設定を閉じる", "en": "Close setup"},
+  "maint.title": {"ja": "メンテナンス", "en": "Maintenance"},
+  "maint.restart": {"ja": "再起動", "en": "Restart"},
+  "maint.update": {"ja": "アップデート", "en": "Update"},
+  "maint.restart_confirm": {"ja": "常駐のサービスを再起動します。いまの会話は途切れます。よろしいですか？", "en": "This restarts the background service and cuts the current conversation. Continue?"},
+  "maint.update_confirm": {"ja": "最新版に更新して、サービスを再起動します。いまの会話は途切れます。よろしいですか？", "en": "This updates to the latest version and restarts the service, cutting the current conversation. Continue?"},
+  "maint.restarting": {"ja": "再起動しています。復帰するまで待っています…", "en": "Restarting. Waiting for it to come back…"},
+  "maint.updating": {"ja": "アップデートしています（1 分以上かかることがあります）。終わるまでこの画面を開いたままにしてください…", "en": "Updating (this can take a minute or more). Keep this page open until it finishes…"},
+  "maint.about": {"ja": "再起動: 常駐サービスを再起動します。アップデート: 最新版に更新して、必要なら再起動します。", "en": "Restart restarts the background service. Update gets the latest version and restarts if needed."},
   "done.closed": {"ja": "設定を閉じました。この画面は閉じて大丈夫です。", "en": "Setup is closed. You can close this window."}
 }
