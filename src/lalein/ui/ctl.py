@@ -487,7 +487,9 @@ def spawn_character(action: str = "toggle") -> int:
     return 0
 
 
-CHARACTER_PATTERN = "lalein.ui.character_app"  # the overlay's `python -m` module, as pkill -f sees it
+# The overlay's `python -m` module, as pkill -f sees it (an extended regex). The old name too: an
+# install from before the rename restarts it into the new one.
+CHARACTER_PATTERN = r"(lalein|zundamon_jarvis)\.ui\.character_app"
 
 
 def restart_character(run: Callable[..., Any] = subprocess.run, spawn: Callable[..., Any] = subprocess.Popen) -> int:

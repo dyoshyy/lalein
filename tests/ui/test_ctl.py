@@ -546,6 +546,14 @@ def test_character_restart_stops_the_old_overlay_and_starts_a_new_one(monkeypatc
     assert spawned[0][1]["start_new_session"] is True
 
 
+def test_character_restart_also_replaces_an_overlay_from_before_the_rename():
+    import re
+
+    for cmdline in ("/usr/bin/python3 -m lalein.ui.character_app", "/usr/bin/python3 -m zundamon_jarvis.ui.character_app"):
+        assert re.search(ctl.CHARACTER_PATTERN, cmdline)
+    assert not re.search(ctl.CHARACTER_PATTERN, "laleinctl character restart")
+
+
 def test_character_restart_does_nothing_when_none_runs(monkeypatch):
     monkeypatch.setattr(ctl.platform, "system", lambda: "linux")
     spawned = []

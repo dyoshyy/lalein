@@ -4,7 +4,7 @@ After=pipewire.service wireplumber.service pipewire-pulse.service
 PartOf=pipewire.service
 
 [Service]
-ExecStart=%h/.local/share/zundamon-jarvis/audio/aec-follow.sh
+ExecStart=%h/.local/share/lalein/audio/aec-follow.sh
 Restart=always
 RestartSec=2
 
