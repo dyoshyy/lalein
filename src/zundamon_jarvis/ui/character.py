@@ -34,6 +34,12 @@ from typing import Any
 from zundamon_jarvis.core import i18n, platform
 
 STATES = ("listening", "thinking", "speaking", "paused", "limit", "offline")
+# The overlay's layout, the same on every OS: the character at the bottom-right of a WIDTH x
+# HEIGHT box, the speech bubble above it. Prefs' margins place the whole box.
+CHAR_W, CHAR_H = 160, 180
+BUBBLE_H = 110
+WIDTH, HEIGHT = 300, CHAR_H + BUBBLE_H
+CHAR_X, CHAR_Y = WIDTH - CHAR_W, HEIGHT - CHAR_H
 BLINK_PERIOD_S = 4.0
 BLINK_LENGTH_S = 0.16
 
@@ -220,6 +226,30 @@ def menu_text(key: str, lang: str | None = None) -> str:
     return i18n.text(TEXT, key, lang)
 
 
+@dataclass(frozen=True)
+class MenuEntry:
+    """One item of the right-click menu, for a native menu to show: a checkable item with an
+    ``action`` for ``Overlay.choose``, or a submenu (``children``)."""
+    label: str
+    action: tuple[str, ...] | None = None  # ("bubble",) | ("avatar", name) | ("monitor", name) | ("hide",)
+    checked: bool = False
+    children: tuple["MenuEntry", ...] = ()
+
+
+def menu_entries(prefs: "Prefs", screens: list[tuple[str, str]], current: str | None,
+                 lang: str | None = None) -> list[MenuEntry]:
+    """The right-click menu: the bubble, the look, the monitor (``screens``: (name, label);
+    only with more than one) and hiding; ``current`` is the monitor it is on now."""
+    looks = tuple(MenuEntry(avatar_label(a, lang), ("avatar", a), a == prefs.avatar) for a in AVATARS)
+    entries = [MenuEntry(menu_text("menu.bubble", lang), ("bubble",), prefs.bubble),
+               MenuEntry(menu_text("menu.avatar", lang), children=looks)]
+    if len(screens) > 1:
+        on = prefs.monitor or current
+        entries.append(MenuEntry(menu_text("menu.monitor", lang), children=tuple(
+            MenuEntry(label, ("monitor", name), name == on) for name, label in screens)))
+    return [*entries, MenuEntry(menu_text("menu.hide", lang), ("hide",))]
+
+
 def monitor_label(connector: str, model: str | None, description: str | None) -> str:
     """How the menu names a monitor: its model and connector, or the connector alone when the
     model is missing or only a hex product code."""
@@ -259,6 +289,29 @@ def clamp_margins(right: float, bottom: float, size: tuple[int, int],
 
 
 Rect = tuple[int, int, int, int]  # x, y, width, height in the compositor's (logical) screen space
+
+
+def place_in(screen: Rect, right: float, bottom: float, size: tuple[int, int]) -> tuple[int, int]:
+    """The top-left corner of a ``size`` box ``right`` / ``bottom`` from ``screen``'s corner
+    (y down), kept on the screen."""
+    x, y, sw, sh = screen
+    r, b = clamp_margins(right, bottom, size, (sw, sh))
+    return x + sw - r - size[0], y + sh - b - size[1]
+
+
+def margins_in(screen: Rect, left: float, top: float, size: tuple[int, int]) -> tuple[int, int]:
+    """``place_in`` backwards: the margins of a box whose top-left is at ``left`` / ``top``."""
+    x, y, sw, sh = screen
+    return clamp_margins(x + sw - left - size[0], y + sh - top - size[1], size, (sw, sh))
+
+
+def screen_at(screens: dict[str, Rect], point: tuple[float, float]) -> str | None:
+    """The screen under ``point``, or the nearest one when it is off every screen."""
+    def distance(rect: Rect) -> float:
+        x, y, w, h = rect
+        return math.hypot(max(x - point[0], 0, point[0] - (x + w)), max(y - point[1], 0, point[1] - (y + h)))
+
+    return min(screens, key=lambda name: distance(screens[name]), default=None)
 
 
 def drop_on(start: tuple[int, int], monitor: str, pointer_start: tuple[float, float],

@@ -34,6 +34,7 @@ TEXT = {
     "resume": {"ja": "再開", "en": "Resume"},
     "conversation": {"ja": "会話…", "en": "Conversation…"},
     "settings": {"ja": "設定…", "en": "Settings…"},
+    "character": {"ja": "キャラクターを表示 / 隠す", "en": "Show / hide the character"},
     "quit.mac": {"ja": "メニューバーを終了（本体は動き続けます）", "en": "Quit menu bar (daemon keeps running)"},
     "quit.windows": {"ja": "トレイを終了（本体は動き続けます）", "en": "Quit tray (daemon keeps running)"},
     # The daemon is uv's python3.12 (a LaunchAgent), and that is the name macOS lists.
@@ -70,7 +71,7 @@ _UNSET = object()  # nothing polled yet
 @dataclass(frozen=True)
 class MenuItem:
     label: str
-    action: str | None  # "pause" | "resume" | "conversation" | "settings" | "update" | "quit" | None (just a label)
+    action: str | None  # "pause" | "resume" | "conversation" | "settings" | "character" | "update" | "quit" | None (a label)
     enabled: bool = True
 
 
@@ -107,6 +108,7 @@ def menu_model(status: dict | None, system: str = "mac", lang: str | None = None
             MenuItem(t("pause"), "pause", False),
             MenuItem(t("conversation"), "conversation", False),
             MenuItem(t("settings"), "settings", False),
+            MenuItem(t("character"), "character"),  # it shows "offline" then
             quit_item,
         ])
     state = status.get("state", "")
@@ -120,6 +122,7 @@ def menu_model(status: dict | None, system: str = "mac", lang: str | None = None
         MenuItem(t("resume"), "resume") if state == "paused" else MenuItem(t("pause"), "pause"),
         MenuItem(t("conversation"), "conversation"),
         MenuItem(t("settings"), "settings"),
+        MenuItem(t("character"), "character"),
         quit_item,
     ], "\n".join(notes) or None)
 
@@ -150,6 +153,8 @@ def run_menubar() -> int:
                     pass
             elif action in ("conversation", "settings"):
                 ctl.open_window("watch" if action == "conversation" else "settings")
+            elif action == "character":
+                ctl.spawn_character_toggle()
             elif action == "update":
                 updater.launch_from_menu("mac")
         if action == "quit":

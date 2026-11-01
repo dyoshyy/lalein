@@ -7,15 +7,45 @@ up or are crossed out, its mouth smiles, talks or goes flat, its colour follows 
 it lights something up while hearing. A look returns where its head is, for the shared marks
 drawn on top (the sweat drop and the sound waves).
 
-cairo only (no GTK): the overlay (``character_app``) and a contact sheet can both draw it.
+It draws on a ``Canvas``: a ``cairo.Context`` (Linux, Windows) or the macOS Quartz canvas
+(``quartz_canvas``), which has exactly these methods. ``draw_bubble`` draws the speech bubble on
+one too (Windows, macOS; the Linux overlay lays its text out with Pango instead).
 """
 
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from typing import Any, Protocol
 
-import cairo
+from zundamon_jarvis.ui.character import (
+    BUBBLE_H,
+    CHAR_W,
+    CHAR_X,
+    CHAR_Y,
+    DEFAULT_AVATAR,
+    WIDTH,
+    Line,
+    Pose,
+    body_rgb,
+)
 
-from zundamon_jarvis.ui.character import DEFAULT_AVATAR, Pose, body_rgb
+CANVAS_METHODS = frozenset("""
+    save restore translate rotate scale
+    move_to line_to curve_to arc rectangle close_path new_sub_path
+    set_source_rgb set_source_rgba set_line_width set_line_cap
+    fill fill_preserve stroke
+    push_group pop_group_to_source paint_with_alpha
+    select_font_face set_font_size text_extents show_text
+""".split())
+# cairo's values, which the Quartz canvas takes too
+LINE_CAP_BUTT, LINE_CAP_ROUND = 0, 1
+FONT_SLANT_NORMAL, FONT_WEIGHT_NORMAL, FONT_WEIGHT_BOLD = 0, 0, 1
+
+
+class Canvas(Protocol):
+    """The part of ``cairo.Context`` the looks use (``CANVAS_METHODS``)."""
+
+    def __getattr__(self, name: str) -> Any: ...
 
 RGB = tuple[float, float, float]
 Head = tuple[float, float, float]  # centre x, centre y, radius
@@ -25,11 +55,23 @@ CHEEK = (1.0, 0.55, 0.6)
 LIT = (1.0, 0.95, 0.5)  # hearing: what lights up
 
 
+@contextmanager
+def _faded(cr: Canvas, alpha: float) -> Iterator[None]:
+    """Draw at ``alpha`` as one layer, so overlapping parts do not show through each other."""
+    if alpha >= 1.0:
+        yield
+        return
+    cr.push_group()
+    yield
+    cr.pop_group_to_source()
+    cr.paint_with_alpha(alpha)
+
+
 def _shade(rgb: RGB, k: float) -> RGB:
     return (rgb[0] * k, rgb[1] * k, rgb[2] * k)
 
 
-def _ellipse(cr: cairo.Context, x: float, y: float, rx: float, ry: float) -> None:
+def _ellipse(cr: Canvas, x: float, y: float, rx: float, ry: float) -> None:
     cr.save()
     cr.translate(x, y)
     cr.scale(rx, max(ry, 0.01))
@@ -38,7 +80,7 @@ def _ellipse(cr: cairo.Context, x: float, y: float, rx: float, ry: float) -> Non
     cr.restore()
 
 
-def _paint(cr: cairo.Context, fill: RGB, edge: RGB | None = None, width: float = 3.0) -> None:
+def _paint(cr: Canvas, fill: RGB, edge: RGB | None = None, width: float = 3.0) -> None:
     cr.set_source_rgb(*fill)
     if edge is None:
         cr.fill()
@@ -49,13 +91,13 @@ def _paint(cr: cairo.Context, fill: RGB, edge: RGB | None = None, width: float =
     cr.stroke()
 
 
-def _halo(cr: cairo.Context, x: float, y: float, r: float) -> None:
+def _halo(cr: Canvas, x: float, y: float, r: float) -> None:
     cr.arc(x, y, r, 0, 2 * math.pi)
     cr.set_source_rgba(1.0, 0.9, 0.3, 0.45)
     cr.fill()
 
 
-def _cheeks(cr: cairo.Context, p: Pose, xs: tuple[float, ...], y: float, rx: float, ry: float) -> None:
+def _cheeks(cr: Canvas, p: Pose, xs: tuple[float, ...], y: float, rx: float, ry: float) -> None:
     if p.tint == "grey":
         return
     cr.set_source_rgba(*CHEEK, 0.5)
@@ -64,7 +106,7 @@ def _cheeks(cr: cairo.Context, p: Pose, xs: tuple[float, ...], y: float, rx: flo
         cr.fill()
 
 
-def _round_eyes(cr: cairo.Context, p: Pose, u: float, xs: tuple[float, ...], y: float, rx: float,
+def _round_eyes(cr: Canvas, p: Pose, u: float, xs: tuple[float, ...], y: float, rx: float,
                 ry: float, colour: RGB = INK, glint: bool = True) -> None:
     look = p.eye_look_y * u * 0.06
     for x in xs:
@@ -88,7 +130,7 @@ def _round_eyes(cr: cairo.Context, p: Pose, u: float, xs: tuple[float, ...], y: 
                 cr.fill()
 
 
-def _mouth(cr: cairo.Context, p: Pose, x: float, y: float, s: float, colour: RGB = INK) -> None:
+def _mouth(cr: Canvas, p: Pose, x: float, y: float, s: float, colour: RGB = INK) -> None:
     """A smile, a talking oval or a flat wavy line, ``s`` wide either side."""
     cr.set_source_rgb(*colour)
     cr.set_line_width(3)
@@ -107,7 +149,7 @@ def _mouth(cr: cairo.Context, p: Pose, x: float, y: float, s: float, colour: RGB
 
 # ---- the looks ----
 
-def _bot(cr: cairo.Context, p: Pose, u: float, rgb: RGB) -> Head:
+def _bot(cr: Canvas, p: Pose, u: float, rgb: RGB) -> Head:
     """A round blob with an antenna: the original."""
     rx, ry, cy = u * 0.85, u * 0.8, -u * 0.85
     top = cy - ry
@@ -131,7 +173,7 @@ def _bot(cr: cairo.Context, p: Pose, u: float, rgb: RGB) -> Head:
     return 0, cy, rx
 
 
-def _rounded_rect(cr: cairo.Context, x: float, y: float, w: float, h: float, r: float) -> None:
+def _rounded_rect(cr: Canvas, x: float, y: float, w: float, h: float, r: float) -> None:
     cr.new_sub_path()
     cr.arc(x + w - r, y + r, r, -math.pi / 2, 0)
     cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
@@ -140,7 +182,7 @@ def _rounded_rect(cr: cairo.Context, x: float, y: float, w: float, h: float, r: 
     cr.close_path()
 
 
-def _robo(cr: cairo.Context, p: Pose, u: float, rgb: RGB) -> Head:
+def _robo(cr: Canvas, p: Pose, u: float, rgb: RGB) -> Head:
     """A boxy robot whose head is a screen: LED eyes and an LED mouth."""
     edge = _shade(rgb, 0.55)
     # legs, body, arms
@@ -218,19 +260,19 @@ def _robo(cr: cairo.Context, p: Pose, u: float, rgb: RGB) -> Head:
     return hcx, hcy, hw / 2
 
 
-def _cat(cr: cairo.Context, p: Pose, u: float, rgb: RGB) -> Head:
+def _cat(cr: Canvas, p: Pose, u: float, rgb: RGB) -> Head:
     """A black cat sitting, seen whole: tail, haunches, a head with ears, slit eyes."""
     edge = _shade(rgb, 0.55) if p.tint != "normal" else (0.06, 0.06, 0.08)
     # tail, curling up on the right
     wag = p.sway * 3 + p.body_dy * 4
-    cr.set_line_cap(cairo.LINE_CAP_ROUND)
+    cr.set_line_cap(LINE_CAP_ROUND)
     for colour, width in ((edge, u * 0.16 + 6), (rgb, u * 0.16)):  # outlined, like the body
         cr.move_to(u * 0.45, -u * 0.12)
         cr.curve_to(u * 1.05, -u * 0.1, u * (0.95 + wag), -u * 0.7, u * (0.72 + wag), -u * 0.95)
         cr.set_source_rgb(*colour)
         cr.set_line_width(width)
         cr.stroke()
-    cr.set_line_cap(cairo.LINE_CAP_BUTT)
+    cr.set_line_cap(LINE_CAP_BUTT)
     # body: a pear, two front paws
     cr.move_to(-u * 0.62, -u * 0.05)
     cr.curve_to(-u * 0.7, -u * 0.6, -u * 0.35, -u * 1.0, 0, -u * 1.0)
@@ -293,7 +335,7 @@ def _cat(cr: cairo.Context, p: Pose, u: float, rgb: RGB) -> Head:
     return hx, hy, hr
 
 
-def _ghost(cr: cairo.Context, p: Pose, u: float, rgb: RGB) -> Head:
+def _ghost(cr: Canvas, p: Pose, u: float, rgb: RGB) -> Head:
     """A floating teardrop wisp with big dark eyes and little arms."""
     hx, hy, hr = 0.0, -u * 1.25, u * 0.62
     edge = _shade(rgb, 0.7)
@@ -330,7 +372,7 @@ def _ghost(cr: cairo.Context, p: Pose, u: float, rgb: RGB) -> Head:
     return hx, hy, hr
 
 
-def _onigiri(cr: cairo.Context, p: Pose, u: float, rgb: RGB) -> Head:
+def _onigiri(cr: Canvas, p: Pose, u: float, rgb: RGB) -> Head:
     """A rice ball: a soft triangle of rice, a sheet of nori, an umeboshi on top."""
     edge = _shade(rgb, 0.72)
     w, top, base = u * 1.05, -u * 1.95, -u * 0.05
@@ -368,7 +410,7 @@ def _onigiri(cr: cairo.Context, p: Pose, u: float, rgb: RGB) -> Head:
     return 0.0, hy, u * 0.8
 
 
-def _edamame(cr: cairo.Context, p: Pose, u: float, rgb: RGB) -> Head:
+def _edamame(cr: Canvas, p: Pose, u: float, rgb: RGB) -> Head:
     """A tall edamame pod with three beans, a stem on top and twig arms; the face on the top bean."""
     edge = _shade(rgb, 0.6)
     beans = [(0.0, -1.5, 0.48), (0.04, -0.92, 0.42), (-0.02, -0.4, 0.38)]
@@ -385,11 +427,11 @@ def _edamame(cr: cairo.Context, p: Pose, u: float, rgb: RGB) -> Head:
             cr.stroke()
     cr.set_source_rgba(1, 1, 1, 0.35)  # a shine down the pod
     cr.set_line_width(4)
-    cr.set_line_cap(cairo.LINE_CAP_ROUND)
+    cr.set_line_cap(LINE_CAP_ROUND)
     cr.move_to(-u * 0.26, -u * 0.62)
     cr.curve_to(-u * 0.32, -u * 0.9, -u * 0.3, -u * 1.1, -u * 0.22, -u * 1.25)
     cr.stroke()
-    cr.set_line_cap(cairo.LINE_CAP_BUTT)
+    cr.set_line_cap(LINE_CAP_BUTT)
     hx, hy = lean * -1.1 * u, -1.5 * u
     # stem, and a leaf that lights up while hearing
     cr.set_source_rgb(*_shade(rgb, 0.55))
@@ -419,12 +461,12 @@ def _edamame(cr: cairo.Context, p: Pose, u: float, rgb: RGB) -> Head:
     return hx, hy, u * 0.48
 
 
-LOOKS: dict[str, Callable[[cairo.Context, Pose, float, RGB], Head]] = {
+LOOKS: dict[str, Callable[[Canvas, Pose, float, RGB], Head]] = {
     "bot": _bot, "robo": _robo, "cat": _cat, "ghost": _ghost, "onigiri": _onigiri, "edamame": _edamame,
 }
 
 
-def draw_character(cr: cairo.Context, w: float, h: float, p: Pose, avatar: str = DEFAULT_AVATAR) -> None:
+def draw_character(cr: Canvas, w: float, h: float, p: Pose, avatar: str = DEFAULT_AVATAR) -> None:
     look = LOOKS.get(avatar, LOOKS[DEFAULT_AVATAR])
     cr.save()
     cr.translate(w / 2, h * 0.92)  # origin at the feet
@@ -432,7 +474,14 @@ def draw_character(cr: cairo.Context, w: float, h: float, p: Pose, avatar: str =
     cr.rotate(p.sway)
     cr.translate(0, p.body_dy * u * 2)
     cr.scale(1 - p.squash, 1 + p.squash)
-    cr.push_group()
+    with _faded(cr, p.alpha):
+        _draw_figure(cr, look, p, u, avatar)
+    cr.restore()
+    _draw_marks(cr, w, h, u, p)
+
+
+def _draw_figure(cr: Canvas, look: Callable[[Canvas, Pose, float, RGB], Head], p: Pose, u: float,
+                 avatar: str) -> None:
     hx, hy, hr = look(cr, p, u, body_rgb(avatar, p.tint))
     if p.sweat:
         cr.set_source_rgba(0.5, 0.8, 1.0, 0.9)
@@ -452,9 +501,9 @@ def draw_character(cr: cairo.Context, w: float, h: float, p: Pose, avatar: str =
                 cr.new_sub_path()
                 cr.arc(hx, hy, d, start, start + 0.5 * math.pi)
                 cr.stroke()
-    cr.pop_group_to_source()
-    cr.paint_with_alpha(p.alpha)
-    cr.restore()
+
+
+def _draw_marks(cr: Canvas, w: float, h: float, u: float, p: Pose) -> None:
     # thinking dots and sleep z live in the unrotated frame, top right, clear of the head
     top, left = h * 0.92 - u * 2.2, w / 2 + u * 0.75
     if p.dots:
@@ -464,7 +513,76 @@ def draw_character(cr: cairo.Context, w: float, h: float, p: Pose, avatar: str =
             cr.fill()
     if p.zzz >= 0:
         cr.set_source_rgba(0.85, 0.9, 1.0, 1 - p.zzz)
-        cr.select_font_face("sans-serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+        cr.select_font_face("sans-serif", FONT_SLANT_NORMAL, FONT_WEIGHT_BOLD)
         cr.set_font_size(16 + 10 * p.zzz)
         cr.move_to(left + 20 * p.zzz, top + 18 - 14 * p.zzz)
         cr.show_text("z")
+
+
+# ---- the speech bubble (Windows, macOS) ----
+
+BUBBLE_PAD = 10
+BUBBLE_LINES = 4
+BUBBLE_FONT_SIZE = 14
+# (fill, text) per speaker
+BUBBLE_STYLE = {"me": ((1.0, 1.0, 1.0, 0.96), (0.12, 0.14, 0.25)),
+                "you": ((0.86, 0.96, 0.87, 0.96), (0.10, 0.30, 0.15)),
+                "note": ((0.12, 0.14, 0.25, 0.88), (1.0, 1.0, 1.0))}
+
+
+def wrap(text: str, width: float, measure: Callable[[str], float], max_lines: int) -> list[str]:
+    """``text`` in lines no wider than ``width``: broken at the last space when the line has one
+    (English), anywhere otherwise (Japanese); the last line ends in "…" when text is left over."""
+    lines: list[str] = []
+    rest = text.strip()
+    while rest and len(lines) < max_lines:
+        n = 1
+        while n < len(rest) and measure(rest[: n + 1]) <= width:
+            n += 1
+        if n < len(rest) and " " in rest[1:n + 1]:
+            n = rest.rindex(" ", 1, n + 1)
+        lines.append(rest[:n].rstrip())
+        rest = rest[n:].lstrip()
+    if rest and lines:
+        last = lines[-1]
+        while last and measure(last + "…") > width:
+            last = last[:-1]
+        lines[-1] = last.rstrip() + "…"
+    return lines
+
+
+def draw_bubble(cr: Canvas, line: Line, font: str) -> None:
+    """The bubble just above the character's head (in the overlay's WIDTH x HEIGHT box), its
+    tail pointing at the head; ``font`` is a family name the canvas knows."""
+    fill, ink = BUBBLE_STYLE[line.who]
+    cr.select_font_face(font, FONT_SLANT_NORMAL, FONT_WEIGHT_NORMAL)
+    cr.set_font_size(BUBBLE_FONT_SIZE)
+    lines = wrap(line.text, WIDTH - 2 * BUBBLE_PAD - 8, lambda t: cr.text_extents(t)[4], BUBBLE_LINES)
+    if not lines:
+        return
+    step = BUBBLE_FONT_SIZE * 1.35
+    w = min(max(cr.text_extents(t)[4] for t in lines) + 2 * BUBBLE_PAD, WIDTH - 4)
+    h = min(len(lines) * step + 2 * BUBBLE_PAD - (step - BUBBLE_FONT_SIZE), BUBBLE_H + 2)
+    x, bottom = WIDTH - 4 - w, CHAR_Y + 6
+    y = bottom - h
+    tail_x = min(max(CHAR_X + CHAR_W * 0.35, x + 18), x + w - 18)
+
+    def outline() -> None:
+        _rounded_rect(cr, x, y, w, h, 12)
+        cr.move_to(tail_x - 9, bottom - 1)
+        cr.line_to(CHAR_X + CHAR_W * 0.38, CHAR_Y + 30)
+        cr.line_to(tail_x + 9, bottom - 1)
+        cr.close_path()
+
+    # border first, then the fill over its inner half: no seam where the tail meets the box
+    outline()
+    cr.set_source_rgba(0.12, 0.14, 0.25, 0.3)
+    cr.set_line_width(3)
+    cr.stroke()
+    outline()
+    cr.set_source_rgba(*fill[:3], 1.0)
+    cr.fill()
+    cr.set_source_rgb(*ink)
+    for i, text in enumerate(lines):
+        cr.move_to(x + BUBBLE_PAD, y + BUBBLE_PAD + BUBBLE_FONT_SIZE * 0.85 + i * step)
+        cr.show_text(text)

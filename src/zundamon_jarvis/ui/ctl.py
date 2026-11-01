@@ -18,12 +18,15 @@ reconnect follows it too (events carry data, not finished text: ``tool`` has ``l
 language, ``state`` its ``reasons``). The JSON the other commands print stays as the daemon
 sent it (scripts read it); ``bar``'s text and tooltip are shown, so they follow the language.
 
-``character [state [look]]`` runs the on-screen character overlay (``zundamon_jarvis.ui.character_app``)
-under the system python, which has GTK; the optional state previews one animation without a daemon
-(in the given look, or the remembered one).
+``character [state [look]]`` runs the on-screen character: on Linux the GTK overlay
+(``zundamon_jarvis.ui.character_app``) under the system python, which has GTK; on Windows and macOS
+``character_win`` / ``character_mac`` in this python. The optional state previews one animation
+without a daemon (in the given look, or the remembered one).
 ``character hide|show|toggle``, ``character avatar <look>`` and ``character monitor <connector>``
 change its prefs file, which the running overlay follows; ``show`` (and a ``toggle`` that shows
-it) also starts it, or brings back the running one.
+it) also starts it, or brings back the running one. On Windows and macOS, where a lock tells
+whether it runs, ``toggle`` starts one that is not running instead of hiding it
+(``spawn_character_toggle``: the tray's and menu bar's item).
 
 ``window [name]`` toggles a terminal window (``zundamon_jarvis.ui.desktop`` picks how: Hyprland by
 window class, macOS Terminal/iTerm2, or any Linux terminal). ``WINDOWS`` lists the known ones
@@ -44,7 +47,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, TextIO
 
-from zundamon_jarvis.core import i18n, transport
+from zundamon_jarvis.core import i18n, platform, transport
 from zundamon_jarvis.core.control import COMMANDS, request, socket_path, status_label
 from zundamon_jarvis.ui import desktop
 
@@ -448,12 +451,38 @@ def character_command(preview: str | None = None, look: str | None = None) -> tu
 
 
 def _character(preview: str | None, look: str | None = None, execve: Callable[..., Any] = os.execve) -> int:
+    sys_ = platform.system()
+    if sys_ in ("windows", "mac"):  # drawn in this python (cairo / Quartz), no GTK needed
+        import importlib
+
+        module = importlib.import_module(f"zundamon_jarvis.ui.character_{'win' if sys_ == 'windows' else 'mac'}")
+        return module.main([a for a in (preview, look) if a])
     cmd, extra = character_command(preview, look)
     if not Path(cmd[0]).exists():
         print(t("not_found", path=cmd[0]), file=sys.stderr)
         return 1
     execve(cmd[0], cmd, {**os.environ, **extra})
     return 0  # only reached by a fake execve
+
+
+def _character_running() -> bool | None:
+    """Whether the character runs (Windows, macOS: its lock is held), or None where that is not
+    known (Linux: GTK keeps it to one instead)."""
+    if platform.system() not in ("windows", "mac"):
+        return None
+    from zundamon_jarvis.system.supervisor import is_running
+    from zundamon_jarvis.ui.overlay import LOCK
+
+    return is_running(platform.runtime_dir() / LOCK)
+
+
+def spawn_character_toggle() -> None:
+    """``zundamon-jarvisctl character toggle`` in the background: the tray's and menu bar's item."""
+    flags = 0x08000000 if os.name == "nt" else 0  # CREATE_NO_WINDOW: no console flashes up
+    proc = subprocess.Popen([_zundamon_jarvisctl(), "character", "toggle"], stdin=subprocess.DEVNULL,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags,
+                            start_new_session=os.name != "nt")
+    threading.Thread(target=proc.wait, daemon=True).start()  # reap it
 
 
 def _character_prefs(args: list[str]) -> int | None:
@@ -463,6 +492,8 @@ def _character_prefs(args: list[str]) -> int | None:
     path = character.prefs_path()
     if args in (["hide"], ["show"], ["toggle"]):
         hidden = {"hide": True, "show": False}.get(args[0], not character.load_prefs(path).hidden)
+        if args == ["toggle"] and _character_running() is False:  # not running: start it, shown
+            hidden = False
         character.update_prefs(path, hidden=hidden)
         return 0 if hidden else _character(None)
     if len(args) == 2 and args[0] == "avatar":

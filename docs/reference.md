@@ -41,6 +41,18 @@ Comments and unknown keys are kept when the tool edits the file. `zundamon-jarvi
 | logs | `~/.local/state/zundamon-jarvis/` | `~/Library/Logs/zundamon-jarvis/` | `%LOCALAPPDATA%\zundamon-jarvis\logs\` |
 | service | systemd user units | LaunchAgents | `ZundamonJarvis` in `HKCU\…\CurrentVersion\Run` |
 
+## The character
+
+`zundamon-jarvisctl character` puts it on screen. On Mac and Windows, the menu's **Show / hide the character** does the same. On Linux it is also in the app launcher.
+
+- Drag it to move it, onto another display too. On Linux this needs Hyprland.
+- Click it for the conversation.
+- Right-click it for the speech bubble, its look (bot, robot, black cat, ghost, onigiri, edamame), the display it is on, and hiding it.
+- `zundamon-jarvisctl character hide | show | toggle` hides or shows it. `toggle` suits a key binding, and it starts the character if it isn't running.
+- `character avatar <look>` and `character monitor <name>` change its look and display. The display name is `DP-1` on Linux, `DISPLAY1` on Windows, and the display's name on Mac.
+- `character <state> [look]` previews one animation.
+- Where it is, its look and whether it is hidden are kept in `character.json` in the logs folder.
+
 ## Windows service
 
 Windows has no per-user service manager, so `zundamon-jarvis supervise` does the job. It is started at login
@@ -91,8 +103,7 @@ If it doesn't start at login, check that **ZundamonJarvis** is on in Settings > 
   - Bind a key to `zundamon-jarvisctl toggle`.
   - Add a bar module running `zundamon-jarvisctl bar`. Click opens `zundamon-jarvisctl window`; right-click opens `window settings`.
   - Float the classes `zundamon-jarvis-watch` and `zundamon-jarvis-settings`.
-  - `zundamon-jarvisctl character` puts the character on screen. Drag to move (let go over another monitor to move it there), click for the conversation, right-click for a menu: the speech bubble, its look (bot, robot, black cat, ghost, onigiri, edamame), the monitor it is on, and hiding it. Starting it again brings a hidden one back.
-  - `zundamon-jarvisctl character hide|show|toggle` hides or shows it (`toggle` suits a key binding); `character avatar <look>` and `character monitor <connector>` (`DP-1`, ...) change its look and monitor; `character <state> [look]` previews one animation.
+  - Bind a key to `zundamon-jarvisctl character toggle` to show or hide [the character](#the-character).
 
 ## Troubleshooting
 

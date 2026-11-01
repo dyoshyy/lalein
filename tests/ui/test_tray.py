@@ -91,12 +91,13 @@ def test_menu_mirrors_the_menu_bar_and_left_click_opens_the_conversation():
         ("Pause", True, False),
         ("Conversation…", True, True),
         ("Settings…", True, False),
+        ("Show / hide the character", True, False),
         ("Quit tray (daemon keeps running)", True, False),
     ]
     for item in menu.items:
         if item.action:
             item.action(None, item)
-    assert acted == ["pause", "conversation", "settings", "quit"]
+    assert acted == ["pause", "conversation", "settings", "character", "quit"]
 
 
 def test_menu_when_down_has_no_default_and_notes_after_a_separator():
@@ -239,3 +240,10 @@ def test_run_tray_starts_the_update_check_and_stops_it_on_quit(monkeypatch):
     pystray = types.SimpleNamespace(MenuItem=MenuItem, Menu=Menu, Icon=QuittingIcon)
     assert tray.run_tray(pystray, fetch=fetch, image=lambda s: s, lock=Lock(), start_watch=start_watch) == 0
     assert len(watched) == 1 and watched[0].is_set()
+
+
+def test_act_on_character_toggles_it_off_thread(monkeypatch):
+    toggled = threading.Event()
+    monkeypatch.setattr(tray.ctl, "spawn_character_toggle", toggled.set)
+    tray.act_on("character", lambda: pytest.fail("not a quit"))
+    assert toggled.wait(2)

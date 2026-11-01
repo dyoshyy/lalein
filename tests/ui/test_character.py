@@ -20,6 +20,10 @@ from zundamon_jarvis.ui.character import (
     drag_target,
     drop_on,
     is_click,
+    margins_in,
+    menu_entries,
+    place_in,
+    screen_at,
     menu_text,
     monitor_label,
     load_prefs,
@@ -280,3 +284,31 @@ def test_dropping_on_another_monitor_moves_it_there_under_the_pointer():
 def test_a_drop_outside_every_monitor_stays_on_the_same_one_and_on_screen():
     assert drop_on((100, 200), "DP-1", (4100.0, 1000.0), (9999.0, 1000.0), (300, 290), SCREENS) == ("DP-1", 0, 200)
     assert drop_on((100, 200), "gone", (0.0, 0.0), (5.0, 5.0), (300, 290), SCREENS) is None
+
+
+def test_place_in_and_margins_in_are_inverse_and_keep_it_on_screen():
+    screen = (1920, 0, 2560, 1440)
+    assert place_in(screen, 100, 200, (300, 290)) == (1920 + 2560 - 100 - 300, 1440 - 200 - 290)
+    assert margins_in(screen, 1920 + 2560 - 100 - 300, 1440 - 200 - 290, (300, 290)) == (100, 200)
+    assert place_in(screen, 99999, -5, (300, 290)) == (1920, 1440 - 290)
+    assert margins_in(screen, 0, 5000, (300, 290)) == (2560 - 300, 0)
+
+
+def test_screen_at_finds_the_screen_under_a_point_or_the_nearest():
+    screens = {"A": (0, 0, 1920, 1080), "B": (1920, 0, 2560, 1440)}
+    assert screen_at(screens, (100, 100)) == "A"
+    assert screen_at(screens, (2000, 1200)) == "B"
+    assert screen_at(screens, (5000, 100)) == "B"  # off every screen: the nearest
+    assert screen_at({}, (0, 0)) is None
+
+
+def test_menu_entries_are_the_right_click_menu_with_ticks():
+    menu = menu_entries(Prefs(bubble=False, avatar="cat"), [("A", "Dell (A)"), ("B", "B")], "B", "en")
+    assert [(e.label, e.action, e.checked) for e in menu if not e.children] == [
+        ("Show the speech bubble", ("bubble",), False), ("Hide", ("hide",), False)]
+    looks_menu, where = (e for e in menu if e.children)
+    assert looks_menu.label == "Look" and len(looks_menu.children) == len(AVATARS)
+    assert [c.action for c in looks_menu.children if c.checked] == [("avatar", "cat")]
+    assert [(c.label, c.checked) for c in where.children] == [("Dell (A)", False), ("B", True)]
+    one_screen = menu_entries(Prefs(), [("A", "A")], "A", "en")
+    assert [e.label for e in one_screen if e.children] == ["Look"]  # no monitor submenu

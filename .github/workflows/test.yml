@@ -1,5 +1,6 @@
 # Unit tests on Windows (the platform there is no developer machine for). Linux and macOS
-# are tested on the developers' own machines; add them here if that changes.
+# are tested on the developers' own machines; macOS also runs the on-screen character's tests
+# here (its AppKit windows and Quartz drawing; the Windows job runs its Win32 windows).
 name: test
 
 on:
@@ -24,3 +25,17 @@ jobs:
         run: |
           uv run --no-sync zundamon-jarvis --version
           uv run --no-sync zundamon-jarvisctl status; if ($LASTEXITCODE -eq 1) { exit 0 }
+
+  macos-character:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --python 3.12
+      - run: >-
+          uv run --no-sync python -m pytest -v --tb=short -rfE
+          tests/ui/test_character_native.py tests/ui/test_quartz_canvas.py tests/ui/test_looks.py
+          tests/ui/test_overlay.py tests/ui/test_character.py

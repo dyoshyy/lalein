@@ -52,7 +52,8 @@ Echo cancellation (so you can use speakers) and the Hyprland bar module are opti
 
 ## Use
 
-- **Mac:** the menu bar icon. **Windows:** the tray icon. Both offer Pause/Resume, Conversation and Settings.
+- **Mac:** the menu bar icon. **Windows:** the tray icon. Both offer Pause/Resume, Conversation, Settings and Show / hide the character.
+- **The character** sits on screen and shows what she is doing. Drag it anywhere, onto another display too. Click it for the conversation; right-click it to change its look (six of them), pick a display or hide it. You can also start it with `zundamon-jarvisctl character`.
 - **Any OS:**
   - `zundamon-jarvisctl toggle | status | watch | settings`
   - `zundamon-jarvis doctor` gives a diagnostic report with personal data removed.
@@ -119,7 +120,8 @@ Linux では、上の Linux の手順どおりに `~/repos/zundamon-jarvis` に 
 
 ## 使い方
 
-- **Mac:** メニューバーのアイコン。**Windows:** タスクトレイのアイコン。どちらも一時停止、会話の表示、設定ができます。
+- **Mac:** メニューバーのアイコン。**Windows:** タスクトレイのアイコン。どちらも一時停止、会話の表示、設定、キャラクターの表示 / 非表示ができます。
+- **キャラクター**が画面の上で今の様子を見せます。ドラッグで好きな場所へ動かせて、別のディスプレイにも移せます。クリックで会話を表示し、右クリックで見た目（6 種類）の変更、表示するディスプレイの選択、非表示ができます。`zundamon-jarvisctl character` でも起動できます。
 - **どの OS でも:**
   - `zundamon-jarvisctl toggle | status | watch | settings`
   - `zundamon-jarvis doctor` は診断を出力します。個人情報は伏せてあります。
