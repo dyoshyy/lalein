@@ -68,6 +68,10 @@ If it doesn't start at login, check that **ZundamonJarvis** is on in Settings > 
   - The update runs in the background: it stops the service, reinstalls with `uv tool install`, and starts it again.
   - It logs to `update.log` in the logs folder.
 - **A git checkout (the Linux install):** `git pull --ff-only`, `uv sync`, then a restart. It only runs when the tree is clean.
+- **Publishing a release:** "latest" is the newest GitHub release.
+  1. Bump `version` in `pyproject.toml`, run `uv lock`, and merge to main.
+  2. Run `git tag -a vX.Y.Z -m "<release notes>" && git push origin vX.Y.Z`.
+  3. The `release` workflow checks that the tag matches the version, runs the tests, and publishes the release with the tag's message as its notes.
 
 ## Linux extras
 
