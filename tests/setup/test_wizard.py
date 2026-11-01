@@ -6,9 +6,9 @@ from contextlib import asynccontextmanager
 import numpy as np
 import pytest
 
-from zundamon_jarvis.assistant.brain import AuthProblem, TextDelta, TurnEnd, UsageLimit
-from zundamon_jarvis.core.config import load_config
-from zundamon_jarvis.setup import wizard as setup_wizard
+from lalein.assistant.brain import AuthProblem, TextDelta, TurnEnd, UsageLimit
+from lalein.core.config import load_config
+from lalein.setup import wizard as setup_wizard
 
 
 class FakeConsole:
@@ -107,7 +107,7 @@ async def test_setup_stops_when_claude_login_fails(tmp_path):
     kw, services, _ = fakes(tmp_path, login="login")
     con = FakeConsole()
     assert await setup_wizard.run_setup(con, **kw) == 2
-    assert "ターミナルで `claude` を実行してログインしてから、もう一度 `zundamon-jarvis setup` を" in con.text
+    assert "ターミナルで `claude` を実行してログインしてから、もう一度 `lalein setup` を" in con.text
     assert services.started == 0
     assert not (tmp_path / "config.toml").exists()
 
@@ -252,7 +252,7 @@ async def test_setup_checks_the_daemon_mic_and_explains_python_permission(tmp_pa
     assert await setup_wizard.run_setup(con, **kw) == 0
     assert con.text.count(setup_wizard.t("daemon_mic_note", "ja")) == 2  # checked twice, still silent
     assert "python3.12" in setup_wizard.t("daemon_mic_note", "ja") and "tccutil reset Microphone" in setup_wizard.t("daemon_mic_note", "ja")
-    assert "launchctl kickstart -k gui/$UID/dev.zundamon-jarvis.daemon" in setup_wizard.t("daemon_mic_note", "ja")
+    assert "launchctl kickstart -k gui/$UID/dev.lalein.daemon" in setup_wizard.t("daemon_mic_note", "ja")
     assert services.requests.count("debug") == 2 * setup_wizard.DAEMON_MIC_CHECK_S
 
 
@@ -276,7 +276,7 @@ async def test_setup_reports_a_missing_executable(tmp_path):
     kw, services, _ = fakes(tmp_path)
 
     def no_exe():
-        raise RuntimeError("zundamon-jarvis executable not found; install it first (uv tool install .)")
+        raise RuntimeError("lalein executable not found; install it first (uv tool install .)")
 
     kw["start_services"] = no_exe
     con = FakeConsole("", "", "")
@@ -350,7 +350,7 @@ def test_uninstall_asks_about_engine_and_config(tmp_path, answers, engine_kept, 
                                       engine_dir=engine, config_path=cfg) == 0
     assert removed == ["mac"]
     assert engine.exists() is engine_kept and cfg.exists() is config_kept
-    assert "uv tool uninstall zundamon-jarvis" in con.text
+    assert "uv tool uninstall lalein" in con.text
     assert "models--mlx-community--whisper-large-v3-turbo" in con.text
 
 
@@ -406,7 +406,7 @@ def test_engine_command_uses_the_gpu_on_windows(tmp_path):
 
 def test_install_and_start_on_windows_only_installs(monkeypatch):
     calls = []
-    monkeypatch.setattr("zundamon_jarvis.system.service.install_services", calls.append)
+    monkeypatch.setattr("lalein.system.service.install_services", calls.append)
     monkeypatch.setattr(setup_wizard.subprocess, "run", lambda *a, **k: calls.append(("run", a)))
     setup_wizard.install_and_start("windows")
     assert calls == ["windows"]
@@ -422,7 +422,7 @@ def test_resolve_folder(tmp_path, home):
 
 
 def test_save_model_rejects_unknown(tmp_path):
-    from zundamon_jarvis.core.config import Config
+    from lalein.core.config import Config
 
     with pytest.raises(ValueError):
         setup_wizard.save_model("gpt", Config(), tmp_path / "c.toml")

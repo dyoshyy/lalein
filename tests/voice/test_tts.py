@@ -1,6 +1,6 @@
 import pytest
 
-from zundamon_jarvis.voice.tts import Voicevox
+from lalein.voice.tts import Voicevox
 
 pytestmark = pytest.mark.integration
 

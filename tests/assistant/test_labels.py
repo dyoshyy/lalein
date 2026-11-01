@@ -1,6 +1,6 @@
 import pytest
 
-from zundamon_jarvis.assistant.labels import tool_label
+from lalein.assistant.labels import tool_label
 
 CAL = "mcp__claude_ai_Google_Calendar__"
 GMAIL = "mcp__claude_ai_Gmail__"
@@ -88,7 +88,7 @@ def test_labels_in_japanese(name, inp, label):
 
 
 def test_every_english_label_has_a_japanese_one():
-    from zundamon_jarvis.assistant import labels
+    from lalein.assistant import labels
 
     used = {label for _, label in labels._FILE_TOOLS.values()} | {label for _, label in labels._PLAIN.values()}
     used |= {display for _, _, display, _ in labels._MCP} | {label for *_, rules in labels._MCP for _, label, _ in rules}

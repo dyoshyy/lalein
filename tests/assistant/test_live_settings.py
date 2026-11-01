@@ -7,9 +7,9 @@ import numpy as np
 import pytest
 
 from fakes import settle
-from zundamon_jarvis.assistant.daemon import TtsWatch
-from zundamon_jarvis.assistant.live_settings import LiveSettings, parse_model, parse_speaker, parse_speed
-from zundamon_jarvis.core.config import Config, load_config
+from lalein.assistant.daemon import TtsWatch
+from lalein.assistant.live_settings import LiveSettings, parse_model, parse_speaker, parse_speed
+from lalein.core.config import Config, load_config
 
 SPEAKERS = [
     {"name": "ずんだもん", "styles": [{"name": "ノーマル", "id": 3}, {"name": "あまあま", "id": 1}]},
@@ -262,7 +262,7 @@ async def test_a_new_preview_replaces_the_one_playing(env):
     assert ears.calls[-1] is False and not live.previewing
 
 
-async def test_zundamon_jarvis_starting_to_speak_cuts_the_preview(env):
+async def test_lalein_starting_to_speak_cuts_the_preview(env):
     live, cfg, vv, watch, orch, ears, player, _ = env
     player.gate = asyncio.Event()
     await live.preview("3", "1.2", "やあ")
@@ -358,7 +358,7 @@ async def test_any_synth_failure_is_an_error_reply(env):
 async def test_a_preview_cut_before_it_starts_playing_still_unmutes(env):
     live, cfg, vv, watch, orch, ears, player, _ = env
     await live.preview("3", "1.2", "やあ")
-    live.stop_preview()  # ZundamonJarvis starts talking before the play task ever ran
+    live.stop_preview()  # Lalein starts talking before the play task ever ran
     await settle()
     assert ears.calls == [True, False] and player.played == []
     await live.preview("1", "1.2", "つぎ")  # and the next preview works normally

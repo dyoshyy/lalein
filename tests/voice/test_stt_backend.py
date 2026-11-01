@@ -3,7 +3,7 @@ import types
 
 import numpy as np
 
-from zundamon_jarvis.voice import stt
+from lalein.voice import stt
 
 
 def test_make_transcriber_picks_backend(monkeypatch):
@@ -101,7 +101,7 @@ def test_windows_uses_cuda_when_it_runs(monkeypatch):
 
 
 def test_windows_falls_back_to_the_cpu(caplog):
-    caplog.set_level("INFO", logger="zundamon_jarvis.voice.stt")
+    caplog.set_level("INFO", logger="lalein.voice.stt")
     FakeWhisper.made = []
     t = stt.windows_transcriber(FakeWhisper, cuda_device_count=lambda: 0)
     assert (t.device, t.compute_type) == ("cpu", "int8") and FakeWhisper.made == [("cpu", "int8")]

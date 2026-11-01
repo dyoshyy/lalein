@@ -1,10 +1,10 @@
-from zundamon_jarvis import cli
+from lalein import cli
 
 
 def test_dispatches_subcommands(monkeypatch):
     seen = []
-    monkeypatch.setattr("zundamon_jarvis.assistant.daemon.main", lambda argv: seen.append(("daemon", argv)) or 0)
-    monkeypatch.setattr("zundamon_jarvis.voice.voices.main", lambda argv: seen.append(("voices", argv)) or 0)
+    monkeypatch.setattr("lalein.assistant.daemon.main", lambda argv: seen.append(("daemon", argv)) or 0)
+    monkeypatch.setattr("lalein.voice.voices.main", lambda argv: seen.append(("voices", argv)) or 0)
     assert cli.main(["daemon", "--start-paused"]) == 0
     assert cli.main(["voices", "--no-play"]) == 0
     assert seen == [("daemon", ["--start-paused"]), ("voices", ["--no-play"])]
@@ -18,9 +18,9 @@ def test_usage(capsys):
 
 def test_service_and_engine_dispatch(monkeypatch):
     seen = []
-    monkeypatch.setattr("zundamon_jarvis.system.service.install_services", lambda s: seen.append(("install", s)))
-    monkeypatch.setattr("zundamon_jarvis.system.service.uninstall_services", lambda s: seen.append(("uninstall", s)))
-    monkeypatch.setattr("zundamon_jarvis.system.engine.install_engine", lambda s, flavor=None: seen.append(("engine", flavor)))
+    monkeypatch.setattr("lalein.system.service.install_services", lambda s: seen.append(("install", s)))
+    monkeypatch.setattr("lalein.system.service.uninstall_services", lambda s: seen.append(("uninstall", s)))
+    monkeypatch.setattr("lalein.system.engine.install_engine", lambda s, flavor=None: seen.append(("engine", flavor)))
     assert cli.main(["service", "install"]) == 0
     assert cli.main(["service", "uninstall"]) == 0
     assert cli.main(["engine", "install", "--cpu"]) == 0
@@ -30,11 +30,11 @@ def test_service_and_engine_dispatch(monkeypatch):
 
 def test_setup_doctor_models_uninstall_dispatch(monkeypatch):
     seen = []
-    monkeypatch.setattr("zundamon_jarvis.setup.gui.run_gui", lambda: seen.append(("setup", "gui")) or 0)
-    monkeypatch.setattr("zundamon_jarvis.setup.wizard.main", lambda argv: seen.append(("setup", argv)) or 0)
-    monkeypatch.setattr("zundamon_jarvis.setup.wizard.uninstall_main", lambda argv: seen.append(("uninstall", argv)) or 0)
-    monkeypatch.setattr("zundamon_jarvis.system.doctor.main", lambda argv: seen.append(("doctor", argv)) or 0)
-    monkeypatch.setattr("zundamon_jarvis.voice.stt.download_model", lambda: seen.append(("models", None)) or "/cache/m")
+    monkeypatch.setattr("lalein.setup.gui.run_gui", lambda: seen.append(("setup", "gui")) or 0)
+    monkeypatch.setattr("lalein.setup.wizard.main", lambda argv: seen.append(("setup", argv)) or 0)
+    monkeypatch.setattr("lalein.setup.wizard.uninstall_main", lambda argv: seen.append(("uninstall", argv)) or 0)
+    monkeypatch.setattr("lalein.system.doctor.main", lambda argv: seen.append(("doctor", argv)) or 0)
+    monkeypatch.setattr("lalein.voice.stt.download_model", lambda: seen.append(("models", None)) or "/cache/m")
     for argv in (["setup"], ["setup", "--cli"], ["doctor"], ["models", "download"], ["uninstall"]):
         assert cli.main(argv) == 0
     assert seen[:2] == [("setup", "gui"), ("setup", [])]
@@ -47,7 +47,7 @@ def test_models_download_failure_is_reported(monkeypatch, capsys):
     def boom():
         raise OSError("network down")
 
-    monkeypatch.setattr("zundamon_jarvis.voice.stt.download_model", boom)
+    monkeypatch.setattr("lalein.voice.stt.download_model", boom)
     assert cli.main(["models", "download"]) == 1
     assert "network down" in capsys.readouterr().err
 
@@ -59,32 +59,32 @@ def test_version_flag(capsys):
 
 def test_tray_and_supervise_dispatch(monkeypatch):
     seen = []
-    monkeypatch.setattr("zundamon_jarvis.ui.tray.run_tray", lambda: seen.append("tray") or 0)
-    monkeypatch.setattr("zundamon_jarvis.system.supervisor.main", lambda argv: seen.append(("supervise", argv)) or 0)
+    monkeypatch.setattr("lalein.ui.tray.run_tray", lambda: seen.append("tray") or 0)
+    monkeypatch.setattr("lalein.system.supervisor.main", lambda argv: seen.append(("supervise", argv)) or 0)
     assert cli.main(["tray"]) == 0
     assert cli.main(["supervise"]) == 0
     assert seen == ["tray", ("supervise", [])]
 
 
 def test_service_start_stop_on_windows(monkeypatch, capsys):
-    monkeypatch.setattr("zundamon_jarvis.core.platform.system", lambda: "windows")
-    monkeypatch.setattr("zundamon_jarvis.system.service.start_services", lambda s: True)
-    monkeypatch.setattr("zundamon_jarvis.system.service.stop_services", lambda s: "stopped")
+    monkeypatch.setattr("lalein.core.platform.system", lambda: "windows")
+    monkeypatch.setattr("lalein.system.service.start_services", lambda s: True)
+    monkeypatch.setattr("lalein.system.service.stop_services", lambda s: "stopped")
     assert cli.main(["service", "start"]) == 0
     assert cli.main(["service", "stop"]) == 0
     assert capsys.readouterr().out.split() == ["started", "stopped"]
 
 
 def test_service_start_stop_elsewhere_points_to_the_service_manager(monkeypatch, capsys):
-    monkeypatch.setattr("zundamon_jarvis.core.platform.system", lambda: "linux")
+    monkeypatch.setattr("lalein.core.platform.system", lambda: "linux")
     assert cli.main(["service", "stop"]) == 2
     assert "systemctl --user" in capsys.readouterr().err
 
 
 def test_models_download_speaks_the_display_language(monkeypatch, capsys):
-    from zundamon_jarvis.core import i18n
+    from lalein.core import i18n
 
-    monkeypatch.setattr("zundamon_jarvis.voice.stt.download_model", lambda: "/cache/m")
+    monkeypatch.setattr("lalein.voice.stt.download_model", lambda: "/cache/m")
     assert cli.main(["models", "download"]) == 0
     assert "モデルの準備ができました: /cache/m" in capsys.readouterr().out
     monkeypatch.setattr(i18n, "language", lambda config_path=None: "en")

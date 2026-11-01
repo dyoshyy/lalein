@@ -17,11 +17,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from zundamon_jarvis.core.config import load_config
-from zundamon_jarvis.setup import gui as setup_gui
-from zundamon_jarvis.setup import wizard as setup_wizard
-from zundamon_jarvis.setup.gui import App, Request, SetupSession, handle
-from zundamon_jarvis.voice.mics import MicSource
+from lalein.core.config import load_config
+from lalein.setup import gui as setup_gui
+from lalein.setup import wizard as setup_wizard
+from lalein.setup.gui import App, Request, SetupSession, handle
+from lalein.voice.mics import MicSource
 
 SPEAKERS = [
     {"name": "四国めたん", "styles": [{"name": "ノーマル", "id": 2}]},
@@ -435,7 +435,7 @@ def test_start_on_linux_skips_the_daemon_mic_check(make, world):
 
 
 def test_start_failure_is_shown_and_can_be_retried(make, world):
-    world.start_error = RuntimeError("zundamon-jarvis executable not found")
+    world.start_error = RuntimeError("lalein executable not found")
     s = make()
     ready(s)
     s.start_services()
@@ -695,7 +695,7 @@ def test_main_dispatches(monkeypatch):
 # ---- the page itself ----
 
 def _asset(name):
-    return resources.files("zundamon_jarvis").joinpath("assets", "setup", name).read_text(encoding="utf-8")
+    return resources.files("lalein").joinpath("assets", "setup", name).read_text(encoding="utf-8")
 
 
 def test_the_page_loads_nothing_from_outside():
@@ -710,7 +710,7 @@ def test_the_page_script_parses():
     node = shutil.which("node")
     if node is None:
         pytest.skip("node is not installed")
-    path = Path(str(resources.files("zundamon_jarvis").joinpath("assets", "setup", "setup.js")))
+    path = Path(str(resources.files("lalein").joinpath("assets", "setup", "setup.js")))
     r = subprocess.run([node, "--check", str(path)], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
 
@@ -723,7 +723,7 @@ def test_the_page_calls_only_routes_that_exist():
 
 
 def test_demo_deps_build_for_every_os():
-    from zundamon_jarvis.setup import demo as setup_demo
+    from lalein.setup import demo as setup_demo
 
     for system in ("mac", "windows", "linux"):
         deps = setup_demo.demo_deps(system)
@@ -866,7 +866,7 @@ def _catalog():
 
 
 def test_the_page_catalog_is_complete():
-    from zundamon_jarvis.core import i18n
+    from lalein.core import i18n
 
     assert i18n.problems(_catalog()) == []
     assert i18n.problems(setup_gui.TEXT) == [] and i18n.problems(setup_wizard.TEXT) == []
@@ -1026,14 +1026,14 @@ def test_restart_daemon_linux_runs_systemctl_and_reports_errors():
         return subprocess.CompletedProcess(argv, 0, "", "")
 
     setup_gui.restart_daemon_linux(ok)
-    assert calls[0] == ["systemctl", "--user", "restart", "zundamon-jarvis.service"]
+    assert calls[0] == ["systemctl", "--user", "restart", "lalein.service"]
     assert calls[1][1:] == ["character", "restart"]  # the on-screen character follows
     with pytest.raises(RuntimeError, match="not loaded"):
         setup_gui.restart_daemon_linux(lambda argv, **kw: subprocess.CompletedProcess(argv, 5, "", "not loaded"))
 
 
 def test_run_update_on_a_git_checkout_pulls_syncs_and_restarts(tmp_path, monkeypatch):
-    from zundamon_jarvis.system import update as upd
+    from lalein.system import update as upd
 
     ran = []
 
@@ -1054,13 +1054,13 @@ def test_run_update_on_a_git_checkout_pulls_syncs_and_restarts(tmp_path, monkeyp
         find_uv=lambda: "/bin/uv", find_exe=lambda s: "/bin/zj", uid=lambda: 1000)
     assert code == 0
     assert ran == [["git", "pull", "--ff-only"], ["/bin/uv", "sync"],
-                   ["systemctl", "--user", "try-restart", "zundamon-jarvis.service"],
-                   ["/bin/zundamon-jarvisctl", "character", "restart"]]
+                   ["systemctl", "--user", "try-restart", "lalein.service"],
+                   ["/bin/laleinctl", "character", "restart"]]
     assert "$ git pull --ff-only" in out
 
 
 def test_run_update_refuses_a_dirty_checkout_without_running_anything(tmp_path, monkeypatch):
-    from zundamon_jarvis.system import update as upd
+    from lalein.system import update as upd
 
     monkeypatch.setattr(setup_gui.subprocess, "run", lambda *a, **k: pytest.fail("must not run"))
 
@@ -1088,7 +1088,7 @@ def test_restart_daemon_mac_kickstarts_the_agent_and_reports_failure():
         return R(0)
 
     setup_gui.restart_daemon_mac(ok, uid=501)
-    assert calls == [["launchctl", "kickstart", "-k", "gui/501/dev.zundamon-jarvis.daemon"]]
+    assert calls == [["launchctl", "kickstart", "-k", "gui/501/dev.lalein.daemon"]]
     with pytest.raises(RuntimeError, match="not loaded"):
         setup_gui.restart_daemon_mac(lambda argv, **kw: R(113, "not loaded"), uid=501)
 

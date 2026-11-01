@@ -1,4 +1,4 @@
-# Publishes a GitHub release when a version tag is pushed. The installers and `zundamon-jarvis
+# Publishes a GitHub release when a version tag is pushed. The installers and `lalein
 # update` install the latest release's source zip, so nothing is built or uploaded: the release
 # only has to exist, with a tag that matches the package version (an update compares the two;
 # a mismatch would offer the same update forever).

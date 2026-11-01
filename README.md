@@ -1,6 +1,11 @@
-# zundamon-jarvis
+# Lalein
 
 English | [日本語](#日本語)
+
+> **Formerly zundamon-jarvis.** Lalein (λαλεῖν) is Greek for "to talk". An install from before
+> the rename moves itself on its first start after the update: its settings, logs and the voice
+> engine move to the new folders, and its login services are registered under the new name. The
+> old commands (`zundamon-jarvis`, `zundamon-jarvisctl`) keep working for now.
 
 A hands-free voice assistant for [Claude Code](https://claude.com/claude-code), voiced by VOICEVOX's Zundamon.
 You talk, it transcribes locally, asks Claude Code, and answers out loud.
@@ -26,26 +31,26 @@ reopen the terminal. Then run `claude` once and log in. `claude --version` shoul
 **Mac**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dyoshyy/zundamon-jarvis/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/dyoshyy/lalein/main/install.sh | sh
 ```
 
 **Windows** (PowerShell, no admin rights needed)
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/dyoshyy/zundamon-jarvis/main/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/dyoshyy/lalein/main/install.ps1 | iex"
 ```
 
 The installer opens the setup window. It downloads the voice engine and the speech model, then walks you
 through the login check, mic, voice, notes folder and model, and starts the background service. Running
-the same line again is safe. To run setup again later, use `zundamon-jarvis setup` (`--cli` runs it in the terminal).
+the same line again is safe. To run setup again later, use `lalein setup` (`--cli` runs it in the terminal).
 
 ## Linux
 
-Clone to `~/repos/zundamon-jarvis` (the systemd unit runs from there). You need `uv`, PipeWire and a systemd user session.
+Clone it anywhere; the examples use `~/repos/lalein`, and the systemd unit runs it from where it is. You need `uv`, PipeWire and a systemd user session.
 
 ```sh
-git clone https://github.com/dyoshyy/zundamon-jarvis ~/repos/zundamon-jarvis
-cd ~/repos/zundamon-jarvis && uv sync && uv run zundamon-jarvis setup
+git clone https://github.com/dyoshyy/lalein ~/repos/lalein
+cd ~/repos/lalein && uv sync && uv run lalein setup
 ```
 
 Echo cancellation (so you can use speakers) and the Hyprland bar module are optional; see [docs/reference.md](docs/reference.md).
@@ -53,11 +58,11 @@ Echo cancellation (so you can use speakers) and the Hyprland bar module are opti
 ## Use
 
 - **Mac:** the menu bar icon. **Windows:** the tray icon. Both offer Pause/Resume, Conversation, Settings and Show / hide the character.
-- **The character** sits on screen and shows what she is doing. Drag it anywhere, onto another display too. Click it for the conversation; right-click it to change its look (six of them), pick a display or hide it. You can also start it with `zundamon-jarvisctl character`.
+- **The character** sits on screen and shows what she is doing. Drag it anywhere, onto another display too. Click it for the conversation; right-click it to change its look (six of them), pick a display or hide it. You can also start it with `laleinctl character`.
 - **Any OS:**
-  - `zundamon-jarvisctl toggle | status | watch | settings`
-  - `zundamon-jarvis doctor` gives a diagnostic report with personal data removed.
-- **Update:** `zundamon-jarvis update`. On Mac and Windows the menu also offers it when a new version is out.
+  - `laleinctl toggle | status | watch | settings`
+  - `lalein doctor` gives a diagnostic report with personal data removed.
+- **Update:** `lalein update`. On Mac and Windows the menu also offers it when a new version is out.
 - **Display language:** set it on the setup page or in Settings, or with `language = "ja" | "en"` in `config.toml`.
   If it isn't set, the OS language is used.
 
@@ -83,6 +88,10 @@ Settings, file locations, the Windows service and troubleshooting are in [docs/r
 ---
 
 # 日本語
+
+> **旧名は zundamon-jarvis です。** Lalein（ラレイン、λαλεῖν）はギリシャ語で「話す」という意味です。
+> 改名前に入れた環境は、更新後の最初の起動で自動的に引っ越します。設定、ログ、音声エンジンは新しいフォルダへ移り、
+> ログイン時の自動起動も新しい名前で登録し直されます。古いコマンド（`zundamon-jarvis`、`zundamon-jarvisctl`）も、しばらくはそのまま使えます。
 
 [Claude Code](https://claude.com/claude-code) を声で使える、VOICEVOX ずんだもんの音声アシスタントです。
 話しかけると、手元で文字にして Claude Code に聞き、声で答えます。
@@ -114,18 +123,18 @@ CLI のインストーラが「`~/.local/bin`（Windows は `%USERPROFILE%\.loca
 3. マイク、声、メモのフォルダ、モデルを選ぶ
 4. 常駐を始める
 
-何度実行しても大丈夫です。あとから設定し直すときは `zundamon-jarvis setup` を使います（`--cli` を付けるとターミナルで設定します）。
+何度実行しても大丈夫です。あとから設定し直すときは `lalein setup` を使います（`--cli` を付けるとターミナルで設定します）。
 
-Linux では、上の Linux の手順どおりに `~/repos/zundamon-jarvis` に clone して `uv sync` と `setup` を実行します。
+Linux では、上の Linux の手順どおりに clone（例は `~/repos/lalein`。場所はどこでも構いません）して `uv sync` と `setup` を実行します。
 
 ## 使い方
 
 - **Mac:** メニューバーのアイコン。**Windows:** タスクトレイのアイコン。どちらも一時停止、会話の表示、設定、キャラクターの表示 / 非表示ができます。
-- **キャラクター**が画面の上で今の様子を見せます。ドラッグで好きな場所へ動かせて、別のディスプレイにも移せます。クリックで会話を表示し、右クリックで見た目（6 種類）の変更、表示するディスプレイの選択、非表示ができます。`zundamon-jarvisctl character` でも起動できます。
+- **キャラクター**が画面の上で今の様子を見せます。ドラッグで好きな場所へ動かせて、別のディスプレイにも移せます。クリックで会話を表示し、右クリックで見た目（6 種類）の変更、表示するディスプレイの選択、非表示ができます。`laleinctl character` でも起動できます。
 - **どの OS でも:**
-  - `zundamon-jarvisctl toggle | status | watch | settings`
-  - `zundamon-jarvis doctor` は診断を出力します。個人情報は伏せてあります。
-- **更新:** `zundamon-jarvis update`。Mac と Windows では、新しい版が出るとメニューにも出ます。
+  - `laleinctl toggle | status | watch | settings`
+  - `lalein doctor` は診断を出力します。個人情報は伏せてあります。
+- **更新:** `lalein update`。Mac と Windows では、新しい版が出るとメニューにも出ます。
 - **表示言語:** 設定画面か設定ウィンドウで選びます。`config.toml` の `language = "ja" | "en"` でも指定できます。
   指定しないときは OS の言語になります。
 

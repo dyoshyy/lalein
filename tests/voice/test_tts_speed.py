@@ -7,7 +7,7 @@ import wave
 import httpx
 import numpy as np
 
-from zundamon_jarvis.voice.tts import Voicevox
+from lalein.voice.tts import Voicevox
 
 
 def _wav() -> bytes:
@@ -63,7 +63,7 @@ async def test_speed_and_speaker_can_be_given_per_call_or_changed_live():
 
 
 def test_talk_styles_skips_singing_and_junk():
-    from zundamon_jarvis.voice.tts import talk_styles
+    from lalein.voice.tts import talk_styles
 
     speakers = [
         {"name": "四国めたん", "styles": [{"name": "ノーマル", "id": 2, "type": "streaming_talk"},

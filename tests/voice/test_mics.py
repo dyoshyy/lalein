@@ -5,8 +5,8 @@ import subprocess
 
 import pytest
 
-from zundamon_jarvis.voice import mics
-from zundamon_jarvis.voice.mics import MicSource
+from lalein.voice import mics
+from lalein.voice.mics import MicSource
 
 PACTL = json.dumps([
     {"name": "alsa_output.x.monitor", "description": "Monitor of HDMI", "monitor_source": "",

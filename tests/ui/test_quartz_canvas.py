@@ -1,8 +1,8 @@
 import math
 
-from zundamon_jarvis.ui import looks
-from zundamon_jarvis.ui.character import AVATARS, Line, pose_for
-from zundamon_jarvis.ui.quartz_canvas import QuartzCanvas
+from lalein.ui import looks
+from lalein.ui.character import AVATARS, Line, pose_for
+from lalein.ui.quartz_canvas import QuartzCanvas
 
 
 class FakeQuartz:

@@ -1,9 +1,9 @@
-"""The subpackages are layers (``zundamon_jarvis/__init__.py``): each imports only the ones above it."""
+"""The subpackages are layers (``lalein/__init__.py``): each imports only the ones above it."""
 
 import ast
 from pathlib import Path
 
-PKG = Path(__file__).resolve().parent.parent / "src" / "zundamon_jarvis"
+PKG = Path(__file__).resolve().parent.parent / "src" / "lalein"
 LAYERS = ["core", "voice", "assistant", "system", "ui", "setup"]
 
 
@@ -15,7 +15,7 @@ def imported_layers(path: Path) -> set[str]:
             names = [node.module, *(f"{node.module}.{a.name}" for a in node.names)]
         for name in names:
             parts = name.split(".")
-            if parts[0] == "zundamon_jarvis" and len(parts) > 1 and parts[1] in LAYERS:
+            if parts[0] == "lalein" and len(parts) > 1 and parts[1] in LAYERS:
                 found.add(parts[1])
     return found
 

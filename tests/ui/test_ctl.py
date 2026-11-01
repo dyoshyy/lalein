@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 
 from helpers import WINDOWS, endpoint
-from zundamon_jarvis.core import i18n
-from zundamon_jarvis.ui import ctl
+from lalein.core import i18n
+from lalein.ui import ctl
 
 
 @pytest.fixture(autouse=True)
@@ -61,7 +61,7 @@ def test_bar_shows_icon_and_text(monkeypatch, capsys):
     data = json.loads(out.out)
     assert code == 0 and sent == ["status"]
     assert "Paused" in data["text"] and data["class"] == "paused"
-    assert data["tooltip"] == ("ZundamonJarvis: Paused — click: conversation, right-click: settings, "
+    assert data["tooltip"] == ("Lalein: Paused — click: conversation, right-click: settings, "
                                "SUPER+ALT+J: pause/resume")
 
 
@@ -78,7 +78,7 @@ import io  # noqa: E402
 import subprocess  # noqa: E402
 import threading  # noqa: E402
 
-from zundamon_jarvis.core import control  # noqa: E402
+from lalein.core import control  # noqa: E402
 
 TS = "2026-10-24T09:05:30+09:00"
 
@@ -89,9 +89,9 @@ def ev(kind, **fields):
 
 @pytest.mark.parametrize("event, line", [
     (ev("heard", text="明日の予定は？"), "09:05 You ▸\n  明日の予定は？"),
-    (ev("said", text="明日はジムだよ。", what="reply"), "09:05 ZundamonJarvis ▸\n  明日はジムだよ。"),
-    (ev("said", text="ちょっと待ってね", what="filler"), "09:05 ZundamonJarvis ▸\n  (ちょっと待ってね)"),
-    (ev("said", text="上限に達したから黙るね", what="notice"), "09:05 ZundamonJarvis ▸\n  上限に達したから黙るね"),
+    (ev("said", text="明日はジムだよ。", what="reply"), "09:05 Lalein ▸\n  明日はジムだよ。"),
+    (ev("said", text="ちょっと待ってね", what="filler"), "09:05 Lalein ▸\n  (ちょっと待ってね)"),
+    (ev("said", text="上限に達したから黙るね", what="notice"), "09:05 Lalein ▸\n  上限に達したから黙るね"),
     (ev("said", text="予定を入れるけど、いい？", what="question"), "09:05 ❓ Confirm: 予定を入れるけど、いい？"),
     (ev("confirm", question="q", ok=True, why="answer"), "09:05 ✅ Yes → go"),
     (ev("confirm", question="q", ok=False, why="answer"), "09:05 ❌ No → cancelled"),
@@ -179,7 +179,7 @@ async def test_watch_prints_history_then_live_and_waits_when_the_daemon_goes(tmp
     lines = out.getvalue().splitlines()
     assert lines[0][6:] == "You ▸" and lines[1] == "  前の話"
     assert lines[2:] == [LIVE_LINE, lines[3], lines[4], lines[5], WAITING_LINE]
-    assert lines[3].endswith("  📅 Check calendar") and lines[4].endswith("ZundamonJarvis ▸")
+    assert lines[3].endswith("  📅 Check calendar") and lines[4].endswith("Lalein ▸")
     assert lines[5] == "  明日はジムだよ。"
     assert result["code"] == 0 and sleeps == [ctl.RETRY_S]
 
@@ -212,7 +212,7 @@ def test_main_window_toggles_the_watch_window(monkeypatch):
     assert ctl.main(["window"]) == 0
     assert ctl.main(["window", "watch"]) == 0
     name, argv = got[0]
-    assert name == "watch" and Path(argv[0]).stem == "zundamon-jarvisctl" and argv[1:] == ["watch"]
+    assert name == "watch" and Path(argv[0]).stem == "laleinctl" and argv[1:] == ["watch"]
     assert got[0] == got[1]
     assert ctl.main(["window", "nope"]) == 2
 
@@ -222,7 +222,7 @@ def test_main_window_settings_opens_the_settings_window(monkeypatch):
     monkeypatch.setattr(ctl.desktop, "toggle_window", lambda name, argv: got.append((name, argv)))
     assert ctl.main(["window", "settings"]) == 0
     name, argv = got[0]
-    assert name == "settings" and Path(argv[0]).stem == "zundamon-jarvisctl" and argv[1:] == ["settings"]
+    assert name == "settings" and Path(argv[0]).stem == "laleinctl" and argv[1:] == ["settings"]
 
 
 # ---- settings from the command line ----
@@ -251,16 +251,16 @@ def test_settings_runs_the_app_lazily(monkeypatch):
     import types
 
     called = []
-    fake = types.ModuleType("zundamon_jarvis.ui.settings_app")
+    fake = types.ModuleType("lalein.ui.settings_app")
     fake.main = lambda: called.append(1) or 0
-    monkeypatch.setitem(sys.modules, "zundamon_jarvis.ui.settings_app", fake)
+    monkeypatch.setitem(sys.modules, "lalein.ui.settings_app", fake)
     assert ctl.main(["settings"]) == 0 and called == [1]
 
 
-def test_zundamon_jarvisctl_does_not_load_the_tui_library():
+def test_laleinctl_does_not_load_the_tui_library():
     import sys
 
-    code = "import sys, zundamon_jarvis.ui.ctl; print('textual' in sys.modules)"
+    code = "import sys, lalein.ui.ctl; print('textual' in sys.modules)"
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=30)
     assert out.stdout.strip() == "False", out.stderr
 
@@ -272,15 +272,15 @@ def test_character_runs_the_overlay_under_the_system_python(monkeypatch):
     code = ctl._character("speaking", execve=lambda *a: calls.append(a))
     (path, cmd, env), = calls
     assert code == 0 and path == cmd[0] == ctl.SYSTEM_PYTHON
-    assert cmd[1:] == ["-m", "zundamon_jarvis.ui.character_app", "speaking"]
+    assert cmd[1:] == ["-m", "lalein.ui.character_app", "speaking"]
     assert env["PYTHONPATH"].endswith("src")
     assert ctl.character_command("speaking", "cat")[0][-2:] == ["speaking", "cat"]
-    assert ctl.character_command()[0][-1] == "zundamon_jarvis.ui.character_app"
+    assert ctl.character_command()[0][-1] == "lalein.ui.character_app"
 
 
 @pytest.fixture
 def character_prefs(tmp_path, monkeypatch):
-    from zundamon_jarvis.ui import character
+    from lalein.ui import character
 
     path = tmp_path / "character.json"
     monkeypatch.setattr(character, "prefs_path", lambda: path)
@@ -288,7 +288,7 @@ def character_prefs(tmp_path, monkeypatch):
 
 
 def test_character_hide_and_toggle_only_write_the_prefs(character_prefs, monkeypatch):
-    from zundamon_jarvis.ui.character import load_prefs
+    from lalein.ui.character import load_prefs
 
     monkeypatch.setattr(ctl, "_character_running", lambda: None)  # Linux: whether it runs is not known
 
@@ -304,7 +304,7 @@ def test_character_hide_and_toggle_only_write_the_prefs(character_prefs, monkeyp
 
 
 def test_character_show_unhides_and_starts_it(character_prefs, monkeypatch):
-    from zundamon_jarvis.ui.character import Prefs, load_prefs, save_prefs
+    from lalein.ui.character import Prefs, load_prefs, save_prefs
 
     save_prefs(character_prefs, Prefs(hidden=True, avatar="cat"))
     started = []
@@ -314,7 +314,7 @@ def test_character_show_unhides_and_starts_it(character_prefs, monkeypatch):
 
 
 def test_toggling_a_character_that_is_not_running_starts_it(character_prefs, monkeypatch):
-    from zundamon_jarvis.ui.character import load_prefs
+    from lalein.ui.character import load_prefs
 
     started = []
     monkeypatch.setattr(ctl, "_character", lambda preview: started.append(preview) or 0)
@@ -331,7 +331,7 @@ def test_character_runs_in_this_python_on_windows_and_macos(monkeypatch, system,
     import importlib
 
     seen = []
-    target = importlib.import_module(f"zundamon_jarvis.ui.{module}")
+    target = importlib.import_module(f"lalein.ui.{module}")
     monkeypatch.setattr(ctl.platform, "system", lambda: system)
     monkeypatch.setattr(target, "main", lambda argv: seen.append(argv) or 0)
     assert ctl._character("thinking", "cat", execve=lambda *a: pytest.fail("no system python here")) == 0
@@ -352,12 +352,12 @@ def test_spawn_character_toggle_runs_ctl_in_the_background(monkeypatch):
     monkeypatch.setattr(ctl.subprocess, "Popen", Proc)
     ctl.spawn_character_toggle()
     (cmd, kw), = calls
-    assert cmd == [ctl._zundamon_jarvisctl(), "character", "toggle"]
+    assert cmd == [ctl._laleinctl(), "character", "toggle"]
     assert kw["stdin"] == kw["stdout"] == kw["stderr"] == ctl.subprocess.DEVNULL
 
 
 def test_character_avatar_and_monitor_are_remembered(character_prefs, capsys):
-    from zundamon_jarvis.ui.character import AVATARS, load_prefs
+    from lalein.ui.character import AVATARS, load_prefs
 
     assert ctl.main(["character", "avatar", "ghost"]) == 0
     assert ctl.main(["character", "monitor", "DP-2"]) == 0
@@ -368,9 +368,9 @@ def test_character_avatar_and_monitor_are_remembered(character_prefs, capsys):
     assert load_prefs(character_prefs).avatar == "ghost"
 
 
-def test_character_knows_which_zundamon_jarvisctl_opens_the_watch_window():
+def test_character_knows_which_laleinctl_opens_the_watch_window():
     cmd, env = ctl.character_command()
-    assert env["ZUNDAMON_JARVISCTL"] == ctl._zundamon_jarvisctl()
+    assert env["LALEINCTL"] == ctl._laleinctl()
 
 
 def test_hearing_events_are_not_shown_and_keep_the_spinner():
@@ -395,7 +395,7 @@ def test_view_is_busy_only_live_and_until_the_next_event():
     assert not view.busy  # still replaying history
     assert view.feed({"kind": "live"}) == [LIVE_LINE]
     assert view.busy
-    assert view.feed({**ev("said", text="やあ", what="reply"), "id": 2}) == ["09:05 ZundamonJarvis ▸\n  やあ"]
+    assert view.feed({**ev("said", text="やあ", what="reply"), "id": 2}) == ["09:05 Lalein ▸\n  やあ"]
     assert not view.busy
     view.feed({**ev("thinking", on=True), "id": 3})
     assert view.busy
@@ -433,7 +433,7 @@ def test_view_leaves_out_time_and_name_while_the_same_speaker_keeps_talking():
               ev("heard", text="e")]
     out = [line for i, e in enumerate(events, 1) for line in view.feed({**e, "id": i})]
     assert out == ["09:05 You ▸\n  a", "  b",
-                   "09:05 ZundamonJarvis ▸\n  (c)", "  d",
+                   "09:05 Lalein ▸\n  (c)", "  d",
                    "09:05 You ▸\n  e"]
 
 
@@ -446,16 +446,16 @@ def test_view_names_the_speaker_again_after_another_kind_of_line():
 
 
 def test_window_command_finds_the_windows_exe_beside_python(tmp_path, monkeypatch):
-    (tmp_path / "zundamon-jarvisctl.exe").write_text("", encoding="utf-8")
+    (tmp_path / "laleinctl.exe").write_text("", encoding="utf-8")
     monkeypatch.setattr(ctl.sys, "executable", str(tmp_path / "python.exe"))
-    assert ctl._zundamon_jarvisctl() == str(tmp_path / "zundamon-jarvisctl.exe")
+    assert ctl._laleinctl() == str(tmp_path / "laleinctl.exe")
 
 
 # ---- the display language ----
 
 @pytest.mark.parametrize("event, line", [
     (ev("heard", text="明日の予定は？"), "09:05 あなた ▸\n  明日の予定は？"),
-    (ev("said", text="ジムだよ", what="reply"), "09:05 ずんだもん ▸\n  ジムだよ"),
+    (ev("said", text="ジムだよ", what="reply"), "09:05 ラレイン ▸\n  ジムだよ"),
     (ev("said", text="いい？", what="question"), "09:05 ❓ 確認: いい？"),
     (ev("confirm", question="q", ok=False, why="timeout"), "09:05 ⌛ 返事なし → 取り消し"),
     (ev("tool", label="📖 Read file: x.md", labels={"ja": "📖 ファイルを読む: x.md", "en": "📖 Read file: x.md"},
@@ -482,7 +482,7 @@ def test_view_follows_a_language_switch_from_the_next_line(monkeypatch):
     lang[0] = "ja"
     assert view.feed({**ev("heard", text="b"), "id": 2}) == ["  b"]  # same speaker: no name
     assert view.feed({"kind": "live"}) == [ctl.t("live", "ja")] == ["──── ここから最新 ────"]
-    assert view.disconnected() == "⏳ ずんだもんジャーヴィスが動いていません。起動を待っています…"
+    assert view.disconnected() == "⏳ ラレインが動いていません。起動を待っています…"
 
 
 def test_fixed_view_language_and_the_spinner():
@@ -491,14 +491,14 @@ def test_fixed_view_language_and_the_spinner():
     view.feed(ev("thinking", on=True))
     out = io.StringIO()
     ctl.Loader(out, view).tick()
-    assert "ずんだもんが考え中…" in out.getvalue()
+    assert "ラレインが考え中…" in out.getvalue()
 
 
 def test_bar_in_japanese_keeps_its_keys():
     data = ctl.bar_output({"state": "offline", "text": "Offline (mic)", "reasons": ["mic"]}, "ja")
     assert set(data) == {"text", "tooltip", "class"} and data["class"] == "offline"
     assert data["text"].endswith("オフライン（マイク）")
-    assert data["tooltip"] == ("ずんだもんジャーヴィス: オフライン（マイク） — クリック: 会話、右クリック: 設定、"
+    assert data["tooltip"] == ("ラレイン: オフライン（マイク） — クリック: 会話、右クリック: 設定、"
                                "SUPER+ALT+J: 一時停止/再開")
 
 
@@ -506,7 +506,7 @@ def test_messages_in_japanese(monkeypatch, capsys):
     monkeypatch.setattr(i18n, "language", lambda config_path=None: "ja")
     assert ctl.main(["dance"]) == 2
     err = capsys.readouterr().err
-    assert err.startswith("使い方: zundamon-jarvisctl") and "language" in err
+    assert err.startswith("使い方: laleinctl") and "language" in err
     assert ctl.open_window("nope") == 2
     assert "知らないウィンドウです: 'nope'" in capsys.readouterr().err
 
@@ -526,7 +526,7 @@ def test_bare_character_command_starts_the_overlay(monkeypatch):
     monkeypatch.setattr(ctl.platform, "system", lambda: "linux")
     monkeypatch.setattr(ctl.Path, "exists", lambda self: True)
     assert ctl.main(["character"]) == 0
-    assert calls and calls[0][1][1:3] == ["-m", "zundamon_jarvis.ui.character_app"]
+    assert calls and calls[0][1][1:3] == ["-m", "lalein.ui.character_app"]
 
 
 def test_character_restart_stops_the_old_overlay_and_starts_a_new_one(monkeypatch):
@@ -542,7 +542,7 @@ def test_character_restart_stops_the_old_overlay_and_starts_a_new_one(monkeypatc
     monkeypatch.setattr(ctl.time, "sleep", lambda s: None)
     assert ctl.restart_character(run, lambda cmd, **kw: spawned.append((cmd, kw))) == 0
     assert ran == ["pkill", "pgrep", "pgrep"]
-    assert spawned[0][0][1:3] == ["-m", "zundamon_jarvis.ui.character_app"]
+    assert spawned[0][0][1:3] == ["-m", "lalein.ui.character_app"]
     assert spawned[0][1]["start_new_session"] is True
 
 
@@ -558,7 +558,7 @@ def test_character_restart_does_nothing_when_none_runs(monkeypatch):
 
 
 def test_character_show_can_launch_through_a_callback_and_hidden_tells_the_state(character_prefs, monkeypatch):
-    from zundamon_jarvis.ui.character import Prefs, load_prefs, save_prefs
+    from lalein.ui.character import Prefs, load_prefs, save_prefs
 
     monkeypatch.setattr(ctl, "_character_running", lambda: None)
     monkeypatch.setattr(ctl, "_character", lambda preview: pytest.fail("the callback launches it"))
@@ -579,7 +579,7 @@ def test_spawn_character_runs_the_ctl_in_the_background(monkeypatch):
         def wait(self):
             pass
 
-    monkeypatch.setattr(ctl, "_zundamon_jarvisctl", lambda: "ctl")
+    monkeypatch.setattr(ctl, "_laleinctl", lambda: "ctl")
     monkeypatch.setattr(ctl.subprocess, "Popen", lambda cmd, **kw: seen.append(cmd) or Proc())
     ctl.spawn_character("show")
     ctl.spawn_character_toggle()

@@ -4,7 +4,7 @@ import os
 import numpy as np
 import pytest
 
-from zundamon_jarvis.voice.audio_in import AudioIn
+from lalein.voice.audio_in import AudioIn
 
 
 class FakeInputStream:
@@ -392,7 +392,7 @@ async def test_windows_opens_portaudio_devices_and_never_pulse(monkeypatch):
 
 
 async def test_windows_default_name_lookup_is_the_mme_one(monkeypatch):
-    from zundamon_jarvis.voice import audio_in
+    from lalein.voice import audio_in
 
     asked = []
     monkeypatch.setattr(audio_in, "input_device_index",

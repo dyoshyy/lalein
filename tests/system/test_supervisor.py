@@ -5,8 +5,8 @@ import time
 
 import pytest
 
-from zundamon_jarvis.system import supervisor
-from zundamon_jarvis.system.supervisor import ChildSpec, InstanceLock, Policy, Supervisor
+from lalein.system import supervisor
+from lalein.system.supervisor import ChildSpec, InstanceLock, Policy, Supervisor
 
 
 class Clock:
@@ -56,7 +56,7 @@ class Spawner:
 def make(fail=()):
     clock, spawn = Clock(), Spawner(fail)
     specs = [ChildSpec(s.name, s.argv, s.policy)  # no port probe: nothing real listens in tests
-             for s in supervisor.child_specs("windows", r"C:\zj\zundamon-jarvis.exe")]
+             for s in supervisor.child_specs("windows", r"C:\zj\lalein.exe")]
     return Supervisor(specs, spawn, clock), clock, spawn
 
 
@@ -299,7 +299,7 @@ def win_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
     root = logging.getLogger()
     handlers, level = root.handlers[:], root.level
-    yield tmp_path / "local" / "zundamon-jarvis"
+    yield tmp_path / "local" / "lalein"
     for h in root.handlers:  # main() points the root logger at its log file
         if h not in handlers:
             h.close()
@@ -329,7 +329,7 @@ def test_main_runs_until_the_stop_file_appears(win_dirs, monkeypatch):
         assert should_stop()
 
     monkeypatch.setattr(supervisor, "serve", fake_serve)
-    monkeypatch.setattr("zundamon_jarvis.system.service.find_exe", lambda s=None: "zj.exe")
+    monkeypatch.setattr("lalein.system.service.find_exe", lambda s=None: "zj.exe")
     (run / supervisor.STOP).write_text("", encoding="utf-8")  # stale: must not stop the new supervisor at once
     assert supervisor.main([], system="windows") == 0
     assert seen == {"pid": str(os.getpid()), "running": os.getpid()}

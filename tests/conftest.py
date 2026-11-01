@@ -1,6 +1,6 @@
 import pytest
 
-from zundamon_jarvis.core import i18n
+from lalein.core import i18n
 
 _language = i18n.language
 

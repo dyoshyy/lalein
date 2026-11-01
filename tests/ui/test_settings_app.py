@@ -2,8 +2,8 @@
 
 import pytest
 
-from zundamon_jarvis.core.config import load_config
-from zundamon_jarvis.ui import settings_app as sa
+from lalein.core.config import load_config
+from lalein.ui import settings_app as sa
 
 SPEAKERS = [
     {"name": "四国めたん", "styles": [{"name": "ノーマル", "id": 2, "type": "talk"},
@@ -180,7 +180,7 @@ def test_client_preview_reports_busy(tmp_path):
     assert "is speaking" in c.preview(3, 1.2, "この声で話すね。")
     assert d.sent == ["preview 3 1.2 この声で話すね。"]
     path.write_text('language = "ja"\n', encoding="utf-8")
-    assert c.preview(3, 1.2, "やあ") == "ZundamonJarvis が話しているので試聴できません"
+    assert c.preview(3, 1.2, "やあ") == "Lalein が話しているので試聴できません"
 
 
 def test_client_language_online_and_offline(tmp_path):
@@ -195,7 +195,7 @@ def test_client_language_online_and_offline(tmp_path):
     assert load_config(path).language == "ja" and view.lang == "ja" and not view.online
     assert msg is None  # shows at once, nothing waits for a restart
     view, msg = c.set("speed", 1.5)
-    assert msg == "ZundamonJarvis は停止中です — 次の起動から反映"
+    assert msg == "Lalein は停止中です — 次の起動から反映"
     view, msg = c.set("language", "fr")
     assert msg.startswith("変更できません") and load_config(path).language == "ja"
 
@@ -341,7 +341,7 @@ async def test_app_language_row_redraws_the_window_at_once():
     app = sa.SettingsApp(client, preview_delay=0.05)
     async with app.run_test(size=(70, 24)) as pilot:
         await pilot.pause()
-        assert _shown(app, "#title").startswith("ZundamonJarvis 設定") and "閉じる" in _shown(app, "#keys")
+        assert _shown(app, "#title").startswith("Lalein 設定") and "閉じる" in _shown(app, "#keys")
         assert "聞き取り中" in _shown(app, "#status")
         rows = app.query_one("#rows")
         rows.highlighted = sa.ROWS.index("language")
@@ -351,7 +351,7 @@ async def test_app_language_row_redraws_the_window_at_once():
         await pilot.press("right")
         await pilot.pause()
         assert ("set", "language", "en") in client.calls
-        assert _shown(app, "#title").startswith("ZundamonJarvis Settings") and "Close" in _shown(app, "#keys")
+        assert _shown(app, "#title").startswith("Lalein Settings") and "Close" in _shown(app, "#keys")
         assert "Listening" in _shown(app, "#status")
         assert "English" in str(rows.get_option("language").prompt)
         assert "Voice speed" in str(rows.get_option("speed").prompt)
@@ -363,7 +363,7 @@ async def test_app_language_row_redraws_the_window_at_once():
 
 async def test_polls_and_messages_while_the_voice_list_is_open_do_not_break_it():
     client = FakeClient()
-    client.preview = lambda sid, speed, text: "ZundamonJarvis is speaking, so no preview"
+    client.preview = lambda sid, speed, text: "Lalein is speaking, so no preview"
     app = sa.SettingsApp(client, preview_delay=0.02, poll_s=0.05)
     async with app.run_test(size=(64, 22)) as pilot:
         await pilot.press("down", "enter")
@@ -437,7 +437,7 @@ async def test_character_row_shows_and_hides_per_the_current_state():
 
 
 def test_settings_client_toggles_the_character_through_ctl(monkeypatch):
-    from zundamon_jarvis.ui import ctl
+    from lalein.ui import ctl
 
     hidden, calls = [True], []
     monkeypatch.setattr(ctl, "character_hidden", lambda: hidden[0])
@@ -459,19 +459,19 @@ async def test_the_title_shows_the_running_version():
     app = sa.SettingsApp(FakeClient(lang="en"), preview_delay=0.05)
     async with app.run_test(size=(70, 24)) as pilot:
         await pilot.pause(0.1)
-        assert _shown(app, "#title") == "ZundamonJarvis Settings  v0.2.0 (git abc1234)"
+        assert _shown(app, "#title") == "Lalein Settings  v0.2.0 (git abc1234)"
 
 
 def test_version_text_and_service_installed(tmp_path):
-    from zundamon_jarvis.system.update import Install
+    from lalein.system.update import Install
 
     assert sa.version_text("0.2.0", Install("uv-tool", tmp_path)) == "0.2.0"
     assert sa.version_text(None, Install("unknown")) == "?"
     assert sa.version_text("0.2.0", Install("git", tmp_path)) == "0.2.0 (git)"  # not a repo: no commit
     assert not sa.service_installed("linux", tmp_path) and not sa.service_installed("mac", tmp_path)
     (tmp_path / ".config/systemd/user").mkdir(parents=True)
-    (tmp_path / ".config/systemd/user/zundamon-jarvis.service").write_text("")
+    (tmp_path / ".config/systemd/user/lalein.service").write_text("")
     assert sa.service_installed("linux", tmp_path)
     (tmp_path / "Library/LaunchAgents").mkdir(parents=True)
-    (tmp_path / "Library/LaunchAgents/dev.zundamon-jarvis.daemon.plist").write_text("")
+    (tmp_path / "Library/LaunchAgents/dev.lalein.daemon.plist").write_text("")
     assert sa.service_installed("mac", tmp_path)

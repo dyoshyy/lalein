@@ -1,12 +1,12 @@
 #!/bin/sh
-# zundamon-jarvis one-line installer (Apple Silicon macOS 14+)
-#   curl -fsSL https://raw.githubusercontent.com/dyoshyy/zundamon-jarvis/main/install.sh | sh
+# lalein one-line installer (Apple Silicon macOS 14+)
+#   curl -fsSL https://raw.githubusercontent.com/dyoshyy/lalein/main/install.sh | sh
 # 環境変数: ZJ_VERSION=v0.1.0 (版を固定) / ZJ_DRY_RUN=1 (実行せず表示だけ)
 #           ZJ_CLI=1 (設定をブラウザでなくターミナルで行う。エンジンとモデルもここで取得する)
 #           ZJ_LANG=ja|en (表示の言語。既定は LC_ALL / LC_MESSAGES / LANG が ja なら日本語、ほかは英語)
 set -eu
 
-OWNER_REPO="dyoshyy/zundamon-jarvis"
+OWNER_REPO="dyoshyy/lalein"
 ZJ_VERSION="${ZJ_VERSION:-}"
 ZJ_DRY_RUN="${ZJ_DRY_RUN:-0}"
 ZJ_CLI="${ZJ_CLI:-0}"
@@ -14,7 +14,7 @@ ZJ_TTY="${ZJ_TTY:-/dev/tty}"
 MIN_FREE_KB=$((8 * 1024 * 1024))
 CURRENT_STEP=""
 
-# 表示の言語: ZJ_LANG、なければ最初に値のあるロケール変数（zundamon_jarvis.core.i18n と同じ順）
+# 表示の言語: ZJ_LANG、なければ最初に値のあるロケール変数（lalein.core.i18n と同じ順）
 if [ -z "${ZJ_LANG:-}" ]; then
   ZJ_LANG=en
   for _v in "${LC_ALL:-}" "${LC_MESSAGES:-}" "${LANG:-}"; do
@@ -64,7 +64,7 @@ main() {
   if [ "$OS" = Linux ]; then
     die "$(msg "Linux では、この 1 行インストーラは使いません。README の Linux 手順に従ってください。" \
       "This one-line installer is not for Linux. Follow the Linux steps in the README:")
-    https://github.com/dyoshyy/zundamon-jarvis#linux"
+    https://github.com/dyoshyy/lalein#linux"
   fi
   if [ "$OS" = Darwin ] && [ "$ARCH" != arm64 ] && [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || echo 0)" = 1 ]; then
     die "$(msg "ターミナルが Rosetta で動いています。Rosetta を使わずに開き直してから、もう一度実行してください。" \
@@ -144,11 +144,11 @@ main() {
   export PATH="$UV_BIN:$PATH"
 
   # ⑤ 本体
-  step "$(msg "zundamon-jarvis を入れます" "Installing zundamon-jarvis")"
+  step "$(msg "lalein を入れます" "Installing lalein")"
   WANT="${ZJ_VERSION#v}"
   HAVE=""
-  if [ "$ZJ_DRY_RUN" != 1 ] && command -v zundamon-jarvis >/dev/null 2>&1; then
-    HAVE="$(zundamon-jarvis --version 2>/dev/null </dev/null | awk '{print $NF}' | head -n 1 || true)"
+  if [ "$ZJ_DRY_RUN" != 1 ] && command -v lalein >/dev/null 2>&1; then
+    HAVE="$(lalein --version 2>/dev/null </dev/null | awk '{print $NF}' | head -n 1 || true)"
   fi
   if [ -n "$HAVE" ] && [ "$HAVE" = "$WANT" ]; then
     say "    $(msg "すでに $HAVE が入っています。飛ばします" "$HAVE is already installed. Skipping")"
@@ -157,7 +157,7 @@ main() {
     run uv tool install --force --python 3.12 "git+https://github.com/$OWNER_REPO@$ZJ_VERSION"
   fi
   if [ "$ZJ_DRY_RUN" != 1 ]; then
-    command -v zundamon-jarvis >/dev/null 2>&1 || fail_step
+    command -v lalein >/dev/null 2>&1 || fail_step
     case ":$ORIG_PATH:" in
       *":$UV_BIN:"*) ;;
       *)
@@ -173,10 +173,10 @@ main() {
   if [ "$ZJ_CLI" != 1 ]; then
     step "$(msg "設定の画面を開きます（ブラウザで続けてください）" "Opening the setup page (continue in your browser)")"
     if [ "$ZJ_DRY_RUN" = 1 ]; then
-      say "    [dry-run] zundamon-jarvis setup"
-    elif ! zundamon-jarvis setup </dev/null; then
-      say "==> $(msg "設定は終わっていません。ターミナルで zundamon-jarvis setup を実行すると、続きから設定できます。" \
-        "Setup is not finished. Run zundamon-jarvis setup in a terminal to pick up where you left off.")" >&2
+      say "    [dry-run] lalein setup"
+    elif ! lalein setup </dev/null; then
+      say "==> $(msg "設定は終わっていません。ターミナルで lalein setup を実行すると、続きから設定できます。" \
+        "Setup is not finished. Run lalein setup in a terminal to pick up where you left off.")" >&2
       exit 1
     fi
     say "==> $(msg "完了しました" "Done")"
@@ -185,21 +185,21 @@ main() {
 
   # ZJ_CLI=1: これまでどおりターミナルで。エンジンとモデルを先に取得する（済んでいれば何もせず戻る）
   step "$(msg "音声エンジンを入れます（数 GB あります）" "Installing the voice engine (a few GB)")"
-  run zundamon-jarvis engine install
+  run lalein engine install
 
   step "$(msg "文字起こしのモデルを取得します（数 GB あります）" "Downloading the speech recognition model (a few GB)")"
-  run zundamon-jarvis models download
+  run lalein models download
 
   # 対話。curl | sh では stdin がパイプなので端末を直接つなぐ
   step "$(msg "設定を始めます" "Starting setup")"
   if [ "$ZJ_DRY_RUN" = 1 ]; then
-    say "    [dry-run] zundamon-jarvis setup --cli < $ZJ_TTY"
+    say "    [dry-run] lalein setup --cli < $ZJ_TTY"
   elif (: < "$ZJ_TTY") 2>/dev/null; then
-    zundamon-jarvis setup --cli < "$ZJ_TTY" || fail_step
+    lalein setup --cli < "$ZJ_TTY" || fail_step
   else
     say "    $(msg "端末から入力を受け取れないので、設定は自動では始めません。" "No terminal to read your answers from, so setup won't start by itself.")"
     say "    $(msg "ターミナルで次のコマンドを実行してください:" "Run this in a terminal:")"
-    say "        zundamon-jarvis setup --cli"
+    say "        lalein setup --cli"
     exit 0
   fi
 

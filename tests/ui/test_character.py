@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from zundamon_jarvis.ui.character import (
+from lalein.ui.character import (
     AVATARS,
     CLICK_SLOP_PX,
     DEFAULT_AVATAR,
@@ -46,7 +46,7 @@ def test_every_state_has_a_pose_at_any_time():
 
 def test_unknown_or_missing_state_is_offline():
     assert normalize(None) == "offline"
-    assert normalize("off") == "offline"  # what zundamon-jarvisctl prints when no daemon runs
+    assert normalize("off") == "offline"  # what laleinctl prints when no daemon runs
     assert pose_for("bogus", 1.0) == pose_for("offline", 1.0)
 
 
@@ -248,7 +248,7 @@ def test_dragging_follows_the_pointer_on_the_screen():
 
 
 def test_bubble_note_follows_the_display_language():
-    from zundamon_jarvis.ui.character import bubble_note
+    from lalein.ui.character import bubble_note
 
     assert bubble_note(True, "en") == "Speech bubble: on"
     assert bubble_note(False, "ja") == "吹き出し: オフ"

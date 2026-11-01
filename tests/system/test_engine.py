@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from zundamon_jarvis.system import engine
+from lalein.system import engine
 
 
 def _sha(b: bytes) -> str:
@@ -229,7 +229,7 @@ def test_windows_install_unpacks_the_vvpp_with_zipfile(tmp_path, monkeypatch):
 
     monkeypatch.setattr(engine.subprocess, "run", no_tar)
     checked = []
-    dest = tmp_path / "Local" / "zundamon-jarvis" / "voicevox_engine"
+    dest = tmp_path / "Local" / "lalein" / "voicevox_engine"
     engine.install_engine("windows", dest, fetch=_fetch_factory({url: blob}), check=checked.append)
     assert checked and checked[0].name == "run.exe"
     assert (dest / "run.exe").read_bytes() == b"MZ"

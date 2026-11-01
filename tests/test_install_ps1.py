@@ -57,8 +57,8 @@ def test_no_bom_and_utf8():
 
 def test_everything_runs_from_one_call_on_the_last_line():
     code_lines = [l for l in CODE.splitlines() if l.strip()]
-    assert code_lines[0].startswith("function Install-ZundamonJarvis {")
-    assert code_lines[-1] == "Install-ZundamonJarvis"
+    assert code_lines[0].startswith("function Install-Lalein {")
+    assert code_lines[-1] == "Install-Lalein"
     assert code_lines[-2] == "}"  # the function ends right before the call
     # nothing at the top level besides the function and the call
     depth, top = 0, []
@@ -95,13 +95,15 @@ def test_installs_uv_and_the_tagged_zip_without_git():
     args = re.findall(r"'([^']*)'|\"([^\"]*)\"", m.group(1))
     assert [a or b for a, b in args] == [
         "tool", "install", "--force", "--python", "3.12",
-        "zundamon-jarvis @ https://github.com/$OwnerRepo/archive/refs/tags/$Version.zip",
+        "$dist @ https://github.com/$OwnerRepo/archive/refs/tags/$Version.zip",
     ]
     assert "git+" not in TEXT
+    # the name follows the version, as lalein.system.update.dist_for does
+    assert "$dist = 'zundamon-jarvis'" in TEXT and "[int]$Matches[2] -lt 6" in TEXT
 
 
 def test_setup_is_the_last_step_and_downloads_are_left_to_it():
-    assert "Invoke-Zj 'zundamon-jarvis' @('setup')" in TEXT
+    assert "Invoke-Zj 'lalein' @('setup')" in TEXT
     assert "engine install" not in TEXT and "models download" not in TEXT
     assert TEXT.index("@('setup')") > TEXT.index("tool', 'install'")
 
@@ -118,13 +120,13 @@ STEPS = re.findall(r"Step \(T '([^']*)' '([^']*)'\)", TEXT)
 def test_messages_are_japanese_like_install_sh():
     ja = [j for j, _ in STEPS]
     assert ja[0] == "環境を確認しています"
-    assert "zundamon-jarvis を入れます" in ja and "uv を確認しています" in ja
+    assert "lalein を入れます" in ja and "uv を確認しています" in ja
 
 
 def test_messages_are_english_unless_windows_is_japanese():
     assert "(Get-UICulture).Name -like 'ja*'" in TEXT and "$env:ZJ_LANG" in TEXT
     en = [e for _, e in STEPS]
-    assert en[0] == "Checking your system" and "Installing zundamon-jarvis" in en
+    assert en[0] == "Checking your system" and "Installing lalein" in en
     assert len(STEPS) == len(re.findall(r"\bStep \(", TEXT))  # every step comes in both
     # every message with Japanese in it goes through T (outside the comments)
     for line in TEXT.splitlines():
@@ -153,7 +155,7 @@ def test_refuses_outside_windows_and_runs_nothing(tmp_path):
                        env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "ZJ_DRY_RUN": "1", "ZJ_LANG": "ja"})
     assert r.returncode == 1
     assert "Windows 用" in r.stdout + r.stderr
-    assert "==> zundamon-jarvis を入れます" not in r.stdout
+    assert "==> lalein を入れます" not in r.stdout
 
 
 @needs_pwsh
