@@ -14,7 +14,7 @@ ZJ_TTY="${ZJ_TTY:-/dev/tty}"
 MIN_FREE_KB=$((8 * 1024 * 1024))
 CURRENT_STEP=""
 
-# 表示の言語: ZJ_LANG、なければ最初に値のあるロケール変数（zundamon_jarvis.i18n と同じ順）
+# 表示の言語: ZJ_LANG、なければ最初に値のあるロケール変数（zundamon_jarvis.core.i18n と同じ順）
 if [ -z "${ZJ_LANG:-}" ]; then
   ZJ_LANG=en
   for _v in "${LC_ALL:-}" "${LC_MESSAGES:-}" "${LANG:-}"; do

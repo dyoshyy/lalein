@@ -5,7 +5,7 @@ import heapq
 import itertools
 from collections.abc import AsyncIterator
 
-from zundamon_jarvis.brain import BrainEvent, TurnEnd
+from zundamon_jarvis.assistant.brain import BrainEvent, TurnEnd
 
 
 async def settle(rounds: int = 50) -> None:
