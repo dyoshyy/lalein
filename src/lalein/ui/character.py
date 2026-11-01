@@ -67,7 +67,7 @@ class Pose:
 
 AVATARS = ("bot", "robo", "cat", "ghost", "onigiri", "edamame")
 DEFAULT_AVATAR = AVATARS[0]
-_BASE = {"bot": (0.45, 0.75, 1.0), "robo": (0.72, 0.76, 0.82), "cat": (0.22, 0.22, 0.27),
+_BASE = {"bot": (0.45, 0.75, 1.0), "robo": (0.72, 0.76, 0.82), "cat": (0.80, 0.76, 0.72),
          "ghost": (0.94, 0.95, 1.0), "onigiri": (0.98, 0.97, 0.92), "edamame": (0.56, 0.82, 0.36)}
 _TINT = {"dim": ((0.35, 0.40, 0.60), 0.6), "warm": ((1.0, 0.58, 0.30), 0.8)}  # (towards, how far)
 GREY = (0.60, 0.60, 0.62)
@@ -210,7 +210,7 @@ TEXT = {  # the overlay's own notes (what is heard and said is shown as it is)
     "bubble.off": {"ja": "吹き出し: オフ", "en": "Speech bubble: off"},
     "avatar.bot": {"ja": "まるボット", "en": "Bot"},
     "avatar.robo": {"ja": "ロボット", "en": "Robot"},
-    "avatar.cat": {"ja": "くろねこ", "en": "Black cat"},
+    "avatar.cat": {"ja": "ねこ", "en": "Cat"},
     "avatar.ghost": {"ja": "おばけ", "en": "Ghost"},
     "avatar.onigiri": {"ja": "おにぎり", "en": "Onigiri"},
     "avatar.edamame": {"ja": "えだまめ", "en": "Edamame"},

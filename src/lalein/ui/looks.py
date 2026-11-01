@@ -260,79 +260,161 @@ def _robo(cr: Canvas, p: Pose, u: float, rgb: RGB) -> Head:
     return hcx, hcy, hw / 2
 
 
+def _wave(cr: Canvas, p: Pose, u: float, rgb: RGB, cream: RGB, pink: RGB,
+          blob: Callable[..., None]) -> None:
+    """The cat's raised left paw, beside its cheek and in front of it, waving with the talk."""
+    cr.save()
+    cr.translate(-u * 0.5, -u * 0.5)
+    cr.rotate(-0.55 - 0.18 * p.mouth_open)
+    blob(0, -u * 0.2, u * 0.13, u * 0.24, rgb)
+    blob(0, -u * 0.4, u * 0.15, u * 0.13, cream)
+    _ellipse(cr, 0, -u * 0.42, u * 0.065, u * 0.05)
+    _paint(cr, pink)
+    for k in (-1, 0, 1):  # toe beans
+        cr.arc(k * u * 0.065, -u * 0.5, u * 0.025, 0, 2 * math.pi)
+        _paint(cr, pink)
+    cr.restore()
+
+
 def _cat(cr: Canvas, p: Pose, u: float, rgb: RGB) -> Head:
-    """A black cat sitting, seen whole: tail, haunches, a head with ears, slit eyes."""
-    edge = _shade(rgb, 0.55) if p.tint != "normal" else (0.06, 0.06, 0.08)
-    # tail, curling up on the right
-    wag = p.sway * 3 + p.body_dy * 4
+    """A chibi tabby: a big round head with forehead stripes and a cream muzzle, big dark eyes
+    with sparkles, a striped tail, all in a thick brown outline. Sitting with both front paws
+    down; while it talks it raises one and waves."""
+    grey = p.tint == "grey"
+    ink = (0.36, 0.24, 0.2) if not grey else (0.32, 0.32, 0.34)
+    cream = tuple(c + (w - c) * 0.75 for c, w in zip(rgb, (1.0, 0.96, 0.88)))
+    stripe = _shade(rgb, 0.8)
+    pink = (0.97, 0.63, 0.63) if not grey else (0.7, 0.7, 0.72)
+    line = 3.5
+    talking = p.mouth_open > 0.08
+
+    def blob(x: float, y: float, rx: float, ry: float, fill: RGB, angle: float = 0.0) -> None:
+        cr.save()
+        cr.translate(x, y)
+        cr.rotate(angle)
+        _ellipse(cr, 0, 0, rx, ry)
+        cr.restore()
+        _paint(cr, fill, ink, line)
+
+    # tail: curling up on the right, outlined, with two stripes
     cr.set_line_cap(LINE_CAP_ROUND)
-    for colour, width in ((edge, u * 0.16 + 6), (rgb, u * 0.16)):  # outlined, like the body
-        cr.move_to(u * 0.45, -u * 0.12)
-        cr.curve_to(u * 1.05, -u * 0.1, u * (0.95 + wag), -u * 0.7, u * (0.72 + wag), -u * 0.95)
+    wag = p.sway * 2 + p.body_dy * 3
+    for colour, width in ((ink, u * 0.2 + line * 2), (rgb, u * 0.2)):
+        cr.move_to(u * 0.35, -u * 0.12)
+        cr.curve_to(u * 0.95, -u * 0.08, u * (1.0 + wag), -u * 0.55, u * (0.78 + wag), -u * 0.78)
         cr.set_source_rgb(*colour)
         cr.set_line_width(width)
         cr.stroke()
+    cr.set_source_rgb(*stripe)
+    cr.set_line_width(u * 0.06)
+    for t in (0.2, 0.42):
+        cr.move_to(u * (0.86 + wag * t), -u * (0.3 + t * 0.6))
+        cr.line_to(u * (1.04 + wag * t), -u * (0.36 + t * 0.6))
+        cr.stroke()
     cr.set_line_cap(LINE_CAP_BUTT)
-    # body: a pear, two front paws
-    cr.move_to(-u * 0.62, -u * 0.05)
-    cr.curve_to(-u * 0.7, -u * 0.6, -u * 0.35, -u * 1.0, 0, -u * 1.0)
-    cr.curve_to(u * 0.35, -u * 1.0, u * 0.7, -u * 0.6, u * 0.62, -u * 0.05)
-    cr.close_path()
-    _paint(cr, rgb, edge)
-    for px in (-u * 0.2, u * 0.2):
-        _ellipse(cr, px, -u * 0.06, u * 0.15, u * 0.09)
-        _paint(cr, _shade(rgb, 1.25) if rgb[0] < 0.5 else rgb, edge, 2)
-    # head and ears
-    hx, hy, hr = 0.0, -u * 1.38, u * 0.55
-    inner = LIT if p.glow else (0.95, 0.6, 0.7)
+    # body, sitting: a round bean with a cream chest and two front paws
+    blob(0, -u * 0.36, u * 0.5, u * 0.4, rgb)
+    _ellipse(cr, 0, -u * 0.36, u * 0.27, u * 0.3)
+    _paint(cr, cream)
+    cr.set_source_rgb(*stripe)  # a stripe on the flank
+    cr.set_line_width(u * 0.06)
+    cr.set_line_cap(LINE_CAP_ROUND)
+    cr.move_to(u * 0.36, -u * 0.5)
+    cr.line_to(u * 0.44, -u * 0.38)
+    cr.stroke()
+    cr.set_line_cap(LINE_CAP_BUTT)
+    for px in (u * 0.16,) if talking else (-u * 0.16, u * 0.16):  # talking: the left one is up
+        blob(px, -u * 0.08, u * 0.14, u * 0.1, cream)
+        cr.set_source_rgb(*ink)
+        cr.set_line_width(1.8)
+        for k in (-1, 1):  # toes
+            cr.move_to(px + k * u * 0.04, -u * 0.15)
+            cr.line_to(px + k * u * 0.04, -u * 0.1)
+        cr.stroke()
+    # ears, then the head over their bases
+    hx, hy, hrx, hry = 0.0, -u * 1.22, u * 0.84, u * 0.64
+    inner = LIT if p.glow else pink
     for side in (-1, 1):
-        cr.move_to(side * hr * 0.92, hy - hr * 0.1)
-        cr.line_to(side * hr * 0.78, hy - hr * 1.25)
-        cr.line_to(side * hr * 0.2, hy - hr * 0.78)
+        cr.move_to(side * hrx * 0.9, hy - hry * 0.1)
+        cr.curve_to(side * hrx * 0.95, hy - hry * 0.75, side * hrx * 0.92, hy - hry * 1.3, side * hrx * 0.8,
+                    hy - hry * 1.36)
+        cr.curve_to(side * hrx * 0.6, hy - hry * 1.3, side * hrx * 0.35, hy - hry * 1.05, side * hrx * 0.22,
+                    hy - hry * 0.85)
         cr.close_path()
-        _paint(cr, rgb, edge)
-        cr.move_to(side * hr * 0.76, hy - hr * 0.35)
-        cr.line_to(side * hr * 0.72, hy - hr * 1.0)
-        cr.line_to(side * hr * 0.38, hy - hr * 0.72)
+        _paint(cr, rgb, ink, line)
+        cr.move_to(side * hrx * 0.78, hy - hry * 0.6)
+        cr.curve_to(side * hrx * 0.82, hy - hry * 0.95, side * hrx * 0.8, hy - hry * 1.15, side * hrx * 0.75,
+                    hy - hry * 1.18)
+        cr.curve_to(side * hrx * 0.6, hy - hry * 1.1, side * hrx * 0.48, hy - hry * 0.95, side * hrx * 0.42,
+                    hy - hry * 0.8)
         cr.close_path()
         _paint(cr, inner)
-    _ellipse(cr, hx, hy, hr, hr * 0.9)
-    _paint(cr, rgb, edge)
-    # eyes: yellow-green almonds with slit pupils
-    ey = hy - hr * 0.08
-    look = p.eye_look_y * u * 0.05
-    for ex in (-hr * 0.42, hr * 0.42):
-        if p.x_eyes or p.eye_open < 0.15:
-            _round_eyes(cr, p, u, (ex,), ey, u * 0.09, u * 0.1, colour=(0.85, 0.9, 0.5))
-            continue
-        _ellipse(cr, ex, ey, u * 0.13, u * 0.11 * p.eye_open)
-        _paint(cr, (0.85, 0.92, 0.35) if p.tint != "dim" else (0.6, 0.65, 0.3))
-        _ellipse(cr, ex, ey + look, u * 0.03, u * 0.1 * p.eye_open)
-        _paint(cr, (0.05, 0.05, 0.05))
-    # nose, mouth, whiskers
-    ny = hy + hr * 0.28
-    cr.move_to(-4, ny - 2); cr.line_to(4, ny - 2); cr.line_to(0, ny + 3); cr.close_path()
-    _paint(cr, (0.95, 0.55, 0.65))
-    if p.mouth_open > 0.08:
-        _ellipse(cr, 0, ny + u * 0.1, u * 0.07, u * (0.02 + 0.08 * p.mouth_open))
-        _paint(cr, (0.95, 0.45, 0.55))
-    else:
-        cr.set_source_rgb(0.85, 0.85, 0.9)
-        cr.set_line_width(2)
-        if p.mouth_flat:
-            cr.move_to(-u * 0.08, ny + u * 0.1); cr.line_to(u * 0.08, ny + u * 0.1)
-        else:  # ω
-            cr.new_sub_path(); cr.arc(-u * 0.045, ny + u * 0.04, u * 0.045, 0.1 * math.pi, 0.95 * math.pi)
-            cr.new_sub_path(); cr.arc(u * 0.045, ny + u * 0.04, u * 0.045, 0.05 * math.pi, 0.9 * math.pi)
+    _ellipse(cr, hx, hy, hrx, hry)
+    _paint(cr, rgb, ink, line)
+    # forehead stripes, and the cream muzzle
+    cr.set_source_rgb(*stripe)
+    cr.set_line_cap(LINE_CAP_ROUND)
+    cr.set_line_width(u * 0.08)
+    for sx in (-0.13, 0.0, 0.13):
+        cr.move_to(sx * u, hy - hry * 0.9)
+        cr.line_to(sx * u * 0.9, hy - hry * (0.62 if sx else 0.55))
         cr.stroke()
-    cr.set_source_rgba(0.9, 0.9, 0.95, 0.8)
-    cr.set_line_width(1.5)
+    cr.set_line_cap(LINE_CAP_BUTT)
+    _ellipse(cr, 0, hy + hry * 0.4, u * 0.5, u * 0.3)
+    _paint(cr, cream)
+    _ellipse(cr, 0, hy + hry * 0.12, u * 0.13, u * 0.17)  # up between the eyes
+    _paint(cr, cream)
+    _cheeks(cr, p, (-hrx * 0.62, hrx * 0.62), hy + hry * 0.35, u * 0.14, u * 0.09)
+    # eyes: big and dark, two sparkles
+    ey = hy + hry * 0.08
+    look = p.eye_look_y * u * 0.05
+    for ex in (-hrx * 0.42, hrx * 0.42):
+        if p.x_eyes or p.eye_open < 0.15:
+            _round_eyes(cr, p, u, (ex,), ey, u * 0.11, u * 0.12, colour=ink)
+        else:
+            _ellipse(cr, ex, ey + look, u * 0.15, u * 0.16 * p.eye_open)
+            _paint(cr, (0.24, 0.14, 0.11) if not grey else (0.3, 0.3, 0.32))
+            if p.eye_open > 0.5:
+                cr.set_source_rgb(1, 1, 1)
+                cr.arc(ex + u * 0.05, ey + look - u * 0.06, u * 0.05, 0, 2 * math.pi)
+                cr.fill()
+                cr.arc(ex - u * 0.05, ey + look + u * 0.06, u * 0.022, 0, 2 * math.pi)
+                cr.fill()
+    # nose and mouth
+    ny = hy + hry * 0.3
+    cr.move_to(-u * 0.05, ny - u * 0.025)
+    cr.line_to(u * 0.05, ny - u * 0.025)
+    cr.line_to(0, ny + u * 0.035)
+    cr.close_path()
+    _paint(cr, ink)
+    my = ny + u * 0.06
+    if p.mouth_flat:
+        cr.set_source_rgb(*ink)
+        cr.set_line_width(2.5)
+        cr.move_to(-u * 0.09, my + u * 0.03)
+        cr.curve_to(-u * 0.03, my, u * 0.03, my + u * 0.06, u * 0.09, my + u * 0.03)
+        cr.stroke()
+    else:  # an open smile, wider while talking, with a tongue
+        open_ = 0.35 + 0.65 * p.mouth_open
+        mw, mh = u * (0.1 + 0.03 * open_), u * (0.05 + 0.1 * open_)
+        cr.move_to(-mw, my)
+        cr.curve_to(-mw, my + mh * 1.3, mw, my + mh * 1.3, mw, my)
+        cr.curve_to(mw * 0.4, my + mh * 0.2, -mw * 0.4, my + mh * 0.2, -mw, my)
+        cr.close_path()
+        _paint(cr, (0.62, 0.2, 0.22) if not grey else (0.4, 0.4, 0.42), ink, 2.5)
+        _ellipse(cr, 0, my + mh * 0.85, mw * 0.55, mh * 0.3)
+        _paint(cr, (0.98, 0.5, 0.5) if not grey else (0.6, 0.6, 0.62))
+    if talking:
+        _wave(cr, p, u, rgb, cream, pink, blob)
+    # whiskers
+    cr.set_source_rgb(*ink)
+    cr.set_line_width(2)
     for side in (-1, 1):
         for k in (-1, 1):
-            cr.move_to(side * hr * 0.45, ny + k * 3)
-            cr.line_to(side * hr * 1.15, ny + k * 7 - 2)
+            cr.move_to(side * hrx * 0.86, ny + k * u * 0.05 - u * 0.02)
+            cr.line_to(side * hrx * 1.18, ny + k * u * 0.1 - u * 0.04)
         cr.stroke()
-    return hx, hy, hr
+    return hx, hy, hrx
 
 
 def _ghost(cr: Canvas, p: Pose, u: float, rgb: RGB) -> Head:

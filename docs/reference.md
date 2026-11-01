@@ -47,7 +47,7 @@ Comments and unknown keys are kept when the tool edits the file. `laleinctl get`
 
 - Drag it to move it, onto another display too. On Linux this needs Hyprland.
 - Click it for the conversation.
-- Right-click it for the speech bubble, its look (bot, robot, black cat, ghost, onigiri, edamame), the display it is on, and hiding it.
+- Right-click it for the speech bubble, its look (bot, robot, cat, ghost, onigiri, edamame), the display it is on, and hiding it.
 - `laleinctl character hide | show | toggle` hides or shows it. `toggle` suits a key binding, and it starts the character if it isn't running.
 - `character avatar <look>` and `character monitor <name>` change its look and display. The display name is `DP-1` on Linux, `DISPLAY1` on Windows, and the display's name on Mac.
 - `character <state> [look]` previews one animation.
