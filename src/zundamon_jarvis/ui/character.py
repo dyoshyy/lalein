@@ -13,15 +13,21 @@ code (``zundamon_jarvis.ui.character_app``) paints. Everything is deterministic 
 - hearing (the user's speech is being taken in; the ``hearing`` watch event): eyes wide open,
   sound waves beside the head and a lit antenna, on top of any awake state.
 
+The character comes in several looks (``AVATARS``; ``body_rgb`` is each one's colour per tint,
+``looks`` draws each figure). Every look shows the same poses.
+
 Also the rest of the overlay that needs no GTK: ``Bubble`` decides what the speech bubble shows
-(from the control socket's ``watch`` stream), ``Prefs`` is where the character was left and
-whether the bubble is on, ``clamp_margins`` / ``is_click`` are the dragging rules.
+(from the control socket's ``watch`` stream), ``Prefs`` is where the character was left, on which
+monitor, in which look, whether the bubble is on and whether it is hidden; ``clamp_margins`` /
+``is_click`` are the dragging rules. ``zundamon-jarvisctl character hide|show|toggle|avatar|monitor``
+changes the prefs file (``update_prefs``) and the running overlay follows it.
 """
 
 import json
 import math
 import os
-from dataclasses import dataclass, replace
+import re
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +55,31 @@ class Pose:
     tint: str = "normal"  # normal | dim | warm | grey
     waves: float = -1.0  # hearing: sound waves phase 0..1 (moving outward), or -1 for none
     glow: bool = False  # hearing: the antenna bulb is lit
+
+
+# ---- looks ----
+
+AVATARS = ("bot", "robo", "cat", "ghost", "onigiri", "edamame")
+DEFAULT_AVATAR = AVATARS[0]
+_BASE = {"bot": (0.45, 0.75, 1.0), "robo": (0.72, 0.76, 0.82), "cat": (0.22, 0.22, 0.27),
+         "ghost": (0.94, 0.95, 1.0), "onigiri": (0.98, 0.97, 0.92), "edamame": (0.56, 0.82, 0.36)}
+_TINT = {"dim": ((0.35, 0.40, 0.60), 0.6), "warm": ((1.0, 0.58, 0.30), 0.8)}  # (towards, how far)
+GREY = (0.60, 0.60, 0.62)
+
+
+def body_rgb(avatar: str, tint: str) -> tuple[float, float, float]:
+    """The body colour of ``avatar`` in a pose's ``tint``: offline is the same grey for all."""
+    base = _BASE.get(avatar, _BASE[DEFAULT_AVATAR])
+    if tint == "grey":
+        return GREY
+    if tint not in _TINT:
+        return base
+    towards, k = _TINT[tint]
+    return tuple(round(b + (t - b) * k, 4) for b, t in zip(base, towards))  # type: ignore[return-value]
+
+
+def avatar_label(avatar: str, lang: str | None = None) -> str:
+    return i18n.text(TEXT, f"avatar.{avatar}", lang)
 
 
 def normalize(state: object) -> str:
@@ -171,7 +202,30 @@ class Bubble:
 TEXT = {  # the overlay's own notes (what is heard and said is shown as it is)
     "bubble.on": {"ja": "吹き出し: オン", "en": "Speech bubble: on"},
     "bubble.off": {"ja": "吹き出し: オフ", "en": "Speech bubble: off"},
+    "avatar.bot": {"ja": "まるボット", "en": "Bot"},
+    "avatar.robo": {"ja": "ロボット", "en": "Robot"},
+    "avatar.cat": {"ja": "くろねこ", "en": "Black cat"},
+    "avatar.ghost": {"ja": "おばけ", "en": "Ghost"},
+    "avatar.onigiri": {"ja": "おにぎり", "en": "Onigiri"},
+    "avatar.edamame": {"ja": "えだまめ", "en": "Edamame"},
+    "menu.bubble": {"ja": "吹き出しを表示", "en": "Show the speech bubble"},
+    "menu.avatar": {"ja": "見た目", "en": "Look"},
+    "menu.monitor": {"ja": "表示するモニター", "en": "Monitor"},
+    "menu.hide": {"ja": "隠す", "en": "Hide"},  # starting it again (the app launcher) brings it back
 }
+
+
+def menu_text(key: str, lang: str | None = None) -> str:
+    """The right-click menu's words, in the display language."""
+    return i18n.text(TEXT, key, lang)
+
+
+def monitor_label(connector: str, model: str | None, description: str | None) -> str:
+    """How the menu names a monitor: its model and connector, or the connector alone when the
+    model is missing or only a hex product code."""
+    if model and not re.fullmatch(r"0x[0-9a-fA-F]+", model):
+        return f"{model} ({connector})"
+    return connector
 
 
 def bubble_note(on: bool, lang: str | None = None) -> str:
@@ -204,11 +258,34 @@ def clamp_margins(right: float, bottom: float, size: tuple[int, int],
     return (int(min(max(right, 0), max(sw - w, 0))), int(min(max(bottom, 0), max(sh - h, 0))))
 
 
+Rect = tuple[int, int, int, int]  # x, y, width, height in the compositor's (logical) screen space
+
+
+def drop_on(start: tuple[int, int], monitor: str, pointer_start: tuple[float, float],
+            pointer: tuple[float, float], size: tuple[int, int],
+            monitors: dict[str, Rect]) -> tuple[str, int, int] | None:
+    """Where a drag that began at ``start`` margins on ``monitor`` ends: the monitor under the
+    pointer (or the same one, off every monitor) and the margins there that keep the window
+    where the pointer took it, on screen. None when ``monitor`` is not among ``monitors``."""
+    if monitor not in monitors:
+        return None
+    (mx, my, mw, mh), (w, h) = monitors[monitor], size
+    left = mx + mw - start[0] - w + (pointer[0] - pointer_start[0])
+    top = my + mh - start[1] - h + (pointer[1] - pointer_start[1])
+    px, py = pointer
+    name = next((n for n, (x, y, rw, rh) in monitors.items() if x <= px < x + rw and y <= py < y + rh), monitor)
+    x, y, rw, rh = monitors[name]
+    return (name, *clamp_margins(x + rw - left - w, y + rh - top - h, size, (rw, rh)))
+
+
 @dataclass(frozen=True)
 class Prefs:
     right: int = MARGIN
     bottom: int = MARGIN
     bubble: bool = True
+    avatar: str = DEFAULT_AVATAR
+    monitor: str | None = None  # a connector name ("DP-1"); None: wherever the compositor puts it
+    hidden: bool = False
 
 
 def prefs_path() -> Path:
@@ -229,14 +306,23 @@ def load_prefs(path: Path) -> Prefs:
         ok = isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
         return max(int(v), 0) if ok else default
 
-    bubble = raw.get("bubble")
+    bubble, avatar, monitor, hidden = (raw.get(k) for k in ("bubble", "avatar", "monitor", "hidden"))
     return Prefs(right=margin("right", d.right), bottom=margin("bottom", d.bottom),
-                 bubble=bubble if isinstance(bubble, bool) else d.bubble)
+                 bubble=bubble if isinstance(bubble, bool) else d.bubble,
+                 avatar=avatar if avatar in AVATARS else d.avatar,
+                 monitor=monitor if isinstance(monitor, str) and monitor else d.monitor,
+                 hidden=hidden if isinstance(hidden, bool) else d.hidden)
 
 
 def save_prefs(path: Path, prefs: Prefs) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps({"right": prefs.right, "bottom": prefs.bottom,
-                               "bubble": prefs.bubble}), encoding="utf-8")
+    tmp.write_text(json.dumps(asdict(prefs)), encoding="utf-8")
     os.replace(tmp, path)
+
+
+def update_prefs(path: Path, **changes: Any) -> Prefs:
+    """Change some prefs in the file and keep the rest (``zundamon-jarvisctl character ...``)."""
+    prefs = replace(load_prefs(path), **changes)
+    save_prefs(path, prefs)
+    return prefs

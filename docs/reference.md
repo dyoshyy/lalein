@@ -87,7 +87,8 @@ If it doesn't start at login, check that **ZundamonJarvis** is on in Settings > 
   - Bind a key to `zundamon-jarvisctl toggle`.
   - Add a bar module running `zundamon-jarvisctl bar`. Click opens `zundamon-jarvisctl window`; right-click opens `window settings`.
   - Float the classes `zundamon-jarvis-watch` and `zundamon-jarvis-settings`.
-  - `zundamon-jarvisctl character` puts Zundamon on screen. Drag to move, click for the conversation, right-click to toggle the speech bubble.
+  - `zundamon-jarvisctl character` puts the character on screen. Drag to move (let go over another monitor to move it there), click for the conversation, right-click for a menu: the speech bubble, its look (bot, robot, black cat, ghost, onigiri, edamame), the monitor it is on, and hiding it. Starting it again brings a hidden one back.
+  - `zundamon-jarvisctl character hide|show|toggle` hides or shows it (`toggle` suits a key binding); `character avatar <look>` and `character monitor <connector>` (`DP-1`, ...) change its look and monitor; `character <state> [look]` previews one animation.
 
 ## Troubleshooting
 

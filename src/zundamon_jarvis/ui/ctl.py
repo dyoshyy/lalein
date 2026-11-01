@@ -18,8 +18,12 @@ reconnect follows it too (events carry data, not finished text: ``tool`` has ``l
 language, ``state`` its ``reasons``). The JSON the other commands print stays as the daemon
 sent it (scripts read it); ``bar``'s text and tooltip are shown, so they follow the language.
 
-``character [state]`` runs the on-screen character overlay (``zundamon_jarvis.ui.character_app``) under
-the system python, which has GTK; the optional state previews one animation without a daemon.
+``character [state [look]]`` runs the on-screen character overlay (``zundamon_jarvis.ui.character_app``)
+under the system python, which has GTK; the optional state previews one animation without a daemon
+(in the given look, or the remembered one).
+``character hide|show|toggle``, ``character avatar <look>`` and ``character monitor <connector>``
+change its prefs file, which the running overlay follows; ``show`` (and a ``toggle`` that shows
+it) also starts it, or brings back the running one.
 
 ``window [name]`` toggles a terminal window (``zundamon_jarvis.ui.desktop`` picks how: Hyprland by
 window class, macOS Terminal/iTerm2, or any Linux terminal). ``WINDOWS`` lists the known ones
@@ -45,7 +49,8 @@ from zundamon_jarvis.core.control import COMMANDS, request, socket_path, status_
 from zundamon_jarvis.ui import desktop
 
 USAGE = ("zundamon-jarvisctl toggle|pause|resume|status|debug|get|bar|watch|settings"
-         "|set speed|speaker|model|mic|language <value>|window [watch|settings]|character [state]")
+         "|set speed|speaker|model|mic|language <value>|window [watch|settings]|character [state [look]]"
+         "|character hide|show|toggle|avatar <look>|monitor <connector>")
 TEXT = {
     "usage": {"ja": "使い方: {usage}", "en": "usage: {usage}"},
     "tooltip": {"ja": "ずんだもんジャーヴィス: {state} — クリック: 会話、右クリック: 設定、{hotkey}: 一時停止/再開",
@@ -71,6 +76,8 @@ TEXT = {
     "unknown_window": {"ja": "知らないウィンドウです: {name!r}（{names} のどれか）",
                        "en": "unknown window: {name!r} (use {names})"},
     "not_found": {"ja": "zundamon-jarvisctl character: {path} がありません", "en": "zundamon-jarvisctl character: {path} not found"},
+    "unknown_avatar": {"ja": "知らない見た目です: {name!r}（{names} のどれか）",
+                       "en": "unknown look: {name!r} (use {names})"},
 }
 
 
@@ -430,22 +437,44 @@ SYSTEM_PYTHON = "/usr/bin/python3"  # GTK's bindings (python-gobject) are system
 LAYER_SHELL_LIB = "/usr/lib/libgtk4-layer-shell.so"
 
 
-def character_command(preview: str | None = None) -> tuple[list[str], dict[str, str]]:
+def character_command(preview: str | None = None, look: str | None = None) -> tuple[list[str], dict[str, str]]:
     """The system-python command and extra environment that run the character overlay."""
     src = str(Path(__file__).resolve().parents[2])
     env = {"PYTHONPATH": src, "ZUNDAMON_JARVISCTL": _zundamon_jarvisctl()}  # a click opens watch
     if Path(LAYER_SHELL_LIB).exists():  # layer-shell must be loaded before libwayland-client
         env["LD_PRELOAD"] = LAYER_SHELL_LIB
-    return [SYSTEM_PYTHON, "-m", "zundamon_jarvis.ui.character_app", *([preview] if preview else [])], env
+    args = [preview, *([look] if look else [])] if preview else []
+    return [SYSTEM_PYTHON, "-m", "zundamon_jarvis.ui.character_app", *args], env
 
 
-def _character(preview: str | None, execve: Callable[..., Any] = os.execve) -> int:
-    cmd, extra = character_command(preview)
+def _character(preview: str | None, look: str | None = None, execve: Callable[..., Any] = os.execve) -> int:
+    cmd, extra = character_command(preview, look)
     if not Path(cmd[0]).exists():
         print(t("not_found", path=cmd[0]), file=sys.stderr)
         return 1
     execve(cmd[0], cmd, {**os.environ, **extra})
     return 0  # only reached by a fake execve
+
+
+def _character_prefs(args: list[str]) -> int | None:
+    """``character hide|show|toggle|avatar <look>|monitor <connector>``, or None for other args."""
+    from zundamon_jarvis.ui import character
+
+    path = character.prefs_path()
+    if args in (["hide"], ["show"], ["toggle"]):
+        hidden = {"hide": True, "show": False}.get(args[0], not character.load_prefs(path).hidden)
+        character.update_prefs(path, hidden=hidden)
+        return 0 if hidden else _character(None)
+    if len(args) == 2 and args[0] == "avatar":
+        if args[1] not in character.AVATARS:
+            print(t("unknown_avatar", name=args[1], names=", ".join(character.AVATARS)), file=sys.stderr)
+            return 2
+        character.update_prefs(path, avatar=args[1])
+        return 0
+    if len(args) == 2 and args[0] == "monitor":
+        character.update_prefs(path, monitor=args[1])
+        return 0
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -457,8 +486,10 @@ def main(argv: list[str] | None = None) -> int:
         from zundamon_jarvis.ui.settings_app import main as settings_main
 
         return settings_main()
-    if args[:1] == ["character"] and len(args) <= 2:
-        return _character(args[1] if len(args) == 2 else None)
+    if args[:1] == ["character"] and (code := _character_prefs(args[1:])) is not None:
+        return code
+    if args[:1] == ["character"] and len(args) <= 3:
+        return _character(*args[1:])
     if args[:1] == ["window"] and len(args) <= 2:
         return open_window(args[1] if len(args) == 2 else "watch")
     if args[:1] == ["set"] and len(args) == 3:

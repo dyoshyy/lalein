@@ -272,6 +272,53 @@ def test_character_runs_the_overlay_under_the_system_python():
     assert code == 0 and path == cmd[0] == ctl.SYSTEM_PYTHON
     assert cmd[1:] == ["-m", "zundamon_jarvis.ui.character_app", "speaking"]
     assert env["PYTHONPATH"].endswith("src")
+    assert ctl.character_command("speaking", "cat")[0][-2:] == ["speaking", "cat"]
+    assert ctl.character_command()[0][-1] == "zundamon_jarvis.ui.character_app"
+
+
+@pytest.fixture
+def character_prefs(tmp_path, monkeypatch):
+    from zundamon_jarvis.ui import character
+
+    path = tmp_path / "character.json"
+    monkeypatch.setattr(character, "prefs_path", lambda: path)
+    return path
+
+
+def test_character_hide_and_toggle_only_write_the_prefs(character_prefs, monkeypatch):
+    from zundamon_jarvis.ui.character import load_prefs
+
+    monkeypatch.setattr(ctl, "_character", lambda preview: pytest.fail("should not start the overlay"))
+    assert ctl.main(["character", "hide"]) == 0
+    assert load_prefs(character_prefs).hidden is True
+    started = []
+    monkeypatch.setattr(ctl, "_character", lambda preview: started.append(preview) or 0)
+    assert ctl.main(["character", "toggle"]) == 0  # hidden -> shown: start it (or bring it back)
+    assert load_prefs(character_prefs).hidden is False and started == [None]
+    assert ctl.main(["character", "toggle"]) == 0
+    assert load_prefs(character_prefs).hidden is True and started == [None]
+
+
+def test_character_show_unhides_and_starts_it(character_prefs, monkeypatch):
+    from zundamon_jarvis.ui.character import Prefs, load_prefs, save_prefs
+
+    save_prefs(character_prefs, Prefs(hidden=True, avatar="cat"))
+    started = []
+    monkeypatch.setattr(ctl, "_character", lambda preview: started.append(preview) or 0)
+    assert ctl.main(["character", "show"]) == 0
+    assert load_prefs(character_prefs) == Prefs(hidden=False, avatar="cat") and started == [None]
+
+
+def test_character_avatar_and_monitor_are_remembered(character_prefs, capsys):
+    from zundamon_jarvis.ui.character import AVATARS, load_prefs
+
+    assert ctl.main(["character", "avatar", "ghost"]) == 0
+    assert ctl.main(["character", "monitor", "DP-2"]) == 0
+    assert (load_prefs(character_prefs).avatar, load_prefs(character_prefs).monitor) == ("ghost", "DP-2")
+    assert ctl.main(["character", "avatar", "dragon"]) == 2
+    err = capsys.readouterr().err
+    assert "dragon" in err and all(a in err for a in AVATARS)
+    assert load_prefs(character_prefs).avatar == "ghost"
 
 
 def test_character_knows_which_zundamon_jarvisctl_opens_the_watch_window():
