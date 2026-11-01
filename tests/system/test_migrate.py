@@ -99,6 +99,32 @@ def test_linux_migration_moves_everything_and_reinstalls_the_units(home):
     assert platform.config_dir("linux") == home / ".config/lalein"
 
 
+def test_linux_migration_points_the_echo_cancel_extras_at_the_new_directories(home):
+    legacy_dirs("linux")
+    units = home / ".config/systemd/user"
+    units.mkdir(parents=True)
+    (units / migrate.AEC_UNIT).write_text(
+        "[Service]\nExecStart=%h/.local/share/zundamon-jarvis/audio/aec-follow.sh\n", encoding="utf-8")
+    audio = home / ".local/share/zundamon-jarvis/audio"
+    audio.mkdir(parents=True)
+    (audio / "audio-lib.sh").write_text(
+        'BIN_DIR="$HOME/.local/share/zundamon-jarvis/audio"\n'
+        'UNIT=zundamon-jarvis-aec-output.service\n'
+        'CHOICE_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/zundamon-jarvis/aec-output"\n'
+        'STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/zundamon-jarvis"\n'
+        'AEC_SINK=zundamon_jarvis_aec_sink\n', encoding="utf-8")
+    run = Runner()
+    migrate.migrate("linux", run=run, home=home, install=lambda s: None)
+    unit = (units / migrate.AEC_UNIT).read_text(encoding="utf-8")
+    lib = (home / ".local/share/lalein/audio/audio-lib.sh").read_text(encoding="utf-8")
+    assert "ExecStart=%h/.local/share/lalein/audio/aec-follow.sh" in unit
+    assert 'BIN_DIR="$HOME/.local/share/lalein/audio"' in lib
+    assert '/.config}/lalein/aec-output"' in lib and '/.local/state}/lalein"' in lib
+    assert "UNIT=zundamon-jarvis-aec-output.service" in lib and "zundamon_jarvis_aec_sink" in lib  # names kept
+    assert ["systemctl", "--user", "try-restart", migrate.AEC_UNIT] in run.calls
+    assert migrate.repoint_audio(Runner(), home) == []  # done: nothing left to change
+
+
 def test_macos_migration_takes_the_old_agents_out(home):
     legacy_dirs("mac")
     agents = home / "Library/LaunchAgents"

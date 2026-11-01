@@ -11,7 +11,9 @@ What it moves:
   and the old ``voicevox.service``, which runs the engine from the old directory; the
   ``dev.zundamon-jarvis.*`` launchd agents; the ``ZundamonJarvis`` Run value) are stopped and
   removed, then ``service.install_services`` installs the new ones and starts them;
-- on Linux the app launcher entry and its icon.
+- on Linux the app launcher entry and its icon, and the echo-cancel extras
+  (``deploy/install-audio.sh``): they keep their names, but their scripts and the chosen output
+  are in the directories that move, so ``AEC_UNIT`` and the script copies are pointed there.
 
 It runs once: ``MARKER`` in the new data directory says it is done. An install from before the
 rename that updates to 0.5 keeps running under its old services, so ``lalein daemon`` starts
@@ -43,6 +45,12 @@ MARKER = "migrated-from-zundamon-jarvis"
 STARTED = "migrate.started"  # in the runtime directory: a migration was started at (time)
 RESTART_AFTER_S = 15 * 60  # a start older than this failed or was interrupted: try again
 LOG = "migrate.log"
+AEC_UNIT = "zundamon-jarvis-aec-output.service"
+AEC_PATHS = (  # (old, new) in the unit and in the copies of deploy/audio-lib.sh
+    (".local/share/zundamon-jarvis/audio", ".local/share/lalein/audio"),
+    ("/.config}/zundamon-jarvis/aec-output", "/.config}/lalein/aec-output"),
+    ('/.local/state}/zundamon-jarvis"', '/.local/state}/lalein"'),
+)
 
 
 def moves(sys_: str) -> list[tuple[Path, Path]]:
@@ -145,6 +153,27 @@ def remove_legacy_services(sys_: str, run: Callable = subprocess.run, home: Path
     return out
 
 
+def repoint_audio(run: Callable = subprocess.run, home: Path | None = None) -> list[str]:
+    """Linux: point the echo-cancel unit and its scripts at the new directories, and restart it."""
+    home = Path(home) if home else Path.home()
+    unit = home / ".config" / "systemd" / "user" / AEC_UNIT
+    if not unit.exists():
+        return []
+    audio = platform.data_dir("linux", legacy=False) / "audio"
+    changed = []
+    for f in (unit, *sorted(audio.glob("*.sh"))):
+        text = new = f.read_text(encoding="utf-8")
+        for old, to in AEC_PATHS:
+            new = new.replace(old, to)
+        if new != text:
+            f.write_text(new, encoding="utf-8")
+            changed.append(f"pointed {f} at the new directories")
+    if changed:
+        run(["systemctl", "--user", "daemon-reload"], capture_output=True)
+        run(["systemctl", "--user", "try-restart", AEC_UNIT], capture_output=True)
+    return changed
+
+
 def _uid() -> int:
     import os
 
@@ -163,6 +192,8 @@ def migrate(sys_: str | None = None, run: Callable = subprocess.run, home: Path 
     out = remove_legacy_services(sys_, run, home, uid, registry, stop) if had_services else []
     for old, new in moves(sys_):
         out += move_dir(old, new)
+    if sys_ == "linux":
+        out += repoint_audio(run, home)
     if had_services:
         install(sys_)
         out.append("installed the services under the new name")
