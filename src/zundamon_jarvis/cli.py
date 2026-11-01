@@ -10,7 +10,7 @@ USAGE = ("usage: zundamon-jarvis setup [--cli] | zundamon-jarvis doctor | zundam
          " | zundamon-jarvis menubar | zundamon-jarvis tray | zundamon-jarvis supervise"
          " | zundamon-jarvis service install|uninstall|status|start|stop"
          " | zundamon-jarvis engine install [--cpu] | zundamon-jarvis models download")
-TEXT = {  # zundamon_jarvis.i18n: the display language
+TEXT = {  # zundamon_jarvis.core.i18n: the display language
     "model_fetching": {"ja": "文字起こしのモデルを取得しています（初回は数 GB あり、時間がかかります）…",
                        "en": "Downloading the speech-to-text model (several GB the first time; this takes a while)…"},
     "model_failed": {"ja": "モデルを取得できませんでした: {error}", "en": "Couldn't download the model: {error}"},
@@ -19,7 +19,7 @@ TEXT = {  # zundamon_jarvis.i18n: the display language
 
 
 def _t(key: str, **fields: object) -> str:
-    from zundamon_jarvis import i18n
+    from zundamon_jarvis.core import i18n
 
     return i18n.text(TEXT, key, **fields)
 
@@ -33,27 +33,28 @@ def main(argv: list[str] | None = None) -> int:
         print(version("zundamon-jarvis"))
         return 0
     if cmd == "daemon":
-        from zundamon_jarvis.daemon import main as daemon_main
+        from zundamon_jarvis.assistant.daemon import main as daemon_main
 
         return daemon_main(rest)
     if cmd == "voices":
-        from zundamon_jarvis.voices import main as voices_main
+        from zundamon_jarvis.voice.voices import main as voices_main
 
         return voices_main(rest)
     if cmd == "menubar" and not rest:
-        from zundamon_jarvis.menubar import run_menubar
+        from zundamon_jarvis.ui.menubar import run_menubar
 
         return run_menubar()
     if cmd == "tray" and not rest:
-        from zundamon_jarvis.tray import run_tray
+        from zundamon_jarvis.ui.tray import run_tray
 
         return run_tray()
     if cmd == "supervise":
-        from zundamon_jarvis import supervisor
+        from zundamon_jarvis.system import supervisor
 
         return supervisor.main(rest)
     if cmd == "service" and len(rest) == 1 and rest[0] in ("install", "uninstall", "status", "start", "stop"):
-        from zundamon_jarvis import platform, service
+        from zundamon_jarvis.core import platform
+        from zundamon_jarvis.system import service
 
         sys_ = platform.system()
         if rest[0] in ("start", "stop") and sys_ != "windows":
@@ -72,7 +73,8 @@ def main(argv: list[str] | None = None) -> int:
             print(service.service_status(sys_))
         return 0
     if cmd == "engine" and rest[:1] == ["install"] and rest[1:] in ([], ["--cpu"]):
-        from zundamon_jarvis import engine, platform
+        from zundamon_jarvis.core import platform
+        from zundamon_jarvis.system import engine
 
         flavor = "linux-cpu" if rest[1:] == ["--cpu"] else None
         try:
@@ -82,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         return 0
     if cmd == "models" and rest == ["download"]:
-        from zundamon_jarvis import stt
+        from zundamon_jarvis.voice import stt
 
         print(_t("model_fetching"), flush=True)
         try:
@@ -93,19 +95,19 @@ def main(argv: list[str] | None = None) -> int:
         print(_t("model_ready", path=where))
         return 0
     if cmd == "setup":  # the web page; --cli: the terminal questions; --demo: the page with fakes
-        from zundamon_jarvis import setup_gui
+        from zundamon_jarvis.setup import gui as setup_gui
 
         return setup_gui.main(rest)
     if cmd == "doctor":
-        from zundamon_jarvis import doctor
+        from zundamon_jarvis.system import doctor
 
         return doctor.main(rest)
     if cmd == "update":
-        from zundamon_jarvis import update
+        from zundamon_jarvis.system import update
 
         return update.main(rest)
     if cmd == "uninstall":
-        from zundamon_jarvis import setup_wizard
+        from zundamon_jarvis.setup import wizard as setup_wizard
 
         return setup_wizard.uninstall_main(rest)
     print(USAGE, file=sys.stderr)

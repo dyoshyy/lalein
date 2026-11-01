@@ -25,7 +25,7 @@ if [ ! -e "$DEST" ] && [ ! -L "$LEGACY" ] && [ -x "$LEGACY/voicevox_engine/run" 
   MOVED=1
 fi
 
-# Pinned, checksummed download + extraction lives in the Python CLI (src/zundamon_jarvis/engine.py).
+# Pinned, checksummed download + extraction lives in the Python CLI (src/zundamon_jarvis/system/engine.py).
 # Only needed when there is no engine yet.
 if [ ! -x "$DEST/run" ]; then
   ZJ="$HERE/../.venv/bin/zundamon-jarvis"
