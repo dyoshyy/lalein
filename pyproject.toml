@@ -3,7 +3,7 @@
 # update with `uv tool install "zundamon-jarvis @ <tag zip>"`, which needs this name to match.
 # 0.5's updater knows the next one is called lalein (lalein.system.update.dist_for).
 name = "zundamon-jarvis"
-version = "0.5.1"
+version = "0.5.2"
 description = "A voice assistant that talks to Claude Code, voiced by VOICEVOX Zundamon (macOS, Windows, Linux)"
 readme = "README.md"
 authors = [
