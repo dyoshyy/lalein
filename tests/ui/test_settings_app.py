@@ -205,6 +205,7 @@ def test_client_language_online_and_offline(tmp_path):
 class FakeClient:
     def __init__(self, online=True, lang="en", maint=False):
         self.maint = maint
+        self.char_hidden = False
         self.view = sa.View(online=online, state="listening", state_text="Listening",
                             speed=1.2, speaker_id=13, model="sonnet", lang=lang)
         self.calls = []
@@ -242,6 +243,14 @@ class FakeClient:
     def new_session(self):
         self.calls.append(("newsession",))
         return self.view, "Conversation reset"
+
+    def character_hidden(self):
+        return self.char_hidden
+
+    def toggle_character(self):
+        self.calls.append(("character",))
+        self.char_hidden = not self.char_hidden
+        return self.char_hidden
 
     def maintenance(self):
         return self.maint
@@ -407,6 +416,43 @@ async def test_restart_and_update_rows_need_two_enters_and_only_show_when_offere
         await pilot.press("enter")
         await pilot.pause(0.1)
         assert ("update",) in client.calls and "update is done" in _shown(app, "#msg")
+
+
+async def test_character_row_shows_and_hides_per_the_current_state():
+    client = FakeClient()
+    app = sa.SettingsApp(client, preview_delay=0.05)
+    async with app.run_test(size=(70, 24)) as pilot:
+        await pilot.pause()
+        rows = app.query_one("#rows")
+        rows.highlighted = rows.get_option_index("character")
+        await pilot.pause()
+        label = lambda: rows.get_option("character").prompt.plain  # noqa: E731
+        assert "Character" in label() and "Hide" in label()
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert client.calls == [("character",)] and "Show" in label()
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert client.calls == [("character",)] * 2 and "Hide" in label()
+
+
+def test_settings_client_toggles_the_character_through_ctl(monkeypatch):
+    from zundamon_jarvis.ui import ctl
+
+    hidden, calls = [True], []
+    monkeypatch.setattr(ctl, "character_hidden", lambda: hidden[0])
+    monkeypatch.setattr(ctl, "spawn_character", lambda action: calls.append(("spawn", action)) or 0)
+
+    def prefs(args, launch):
+        calls.append(tuple(args))
+        hidden[0] = args == ["hide"]
+        return launch() if args == ["show"] else 0
+
+    monkeypatch.setattr(ctl, "_character_prefs", prefs)
+    client = sa.SettingsClient()
+    assert client.toggle_character() is False  # was hidden: shown (and started) now
+    assert calls == [("show",), ("spawn", "show")]
+    assert client.toggle_character() is True and calls[-1] == ("hide",)
 
 
 async def test_the_title_shows_the_running_version():
