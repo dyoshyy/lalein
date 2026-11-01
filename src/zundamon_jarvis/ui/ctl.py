@@ -476,13 +476,15 @@ def _character_running() -> bool | None:
     return is_running(platform.runtime_dir() / LOCK)
 
 
-def spawn_character_toggle() -> None:
-    """``zundamon-jarvisctl character toggle`` in the background: the tray's and menu bar's item."""
+def spawn_character(action: str = "toggle") -> int:
+    """``zundamon-jarvisctl character <action>`` in the background (the tray's and menu bar's item,
+    and the settings window's, which must not be replaced by the overlay)."""
     flags = 0x08000000 if os.name == "nt" else 0  # CREATE_NO_WINDOW: no console flashes up
-    proc = subprocess.Popen([_zundamon_jarvisctl(), "character", "toggle"], stdin=subprocess.DEVNULL,
+    proc = subprocess.Popen([_zundamon_jarvisctl(), "character", action], stdin=subprocess.DEVNULL,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags,
                             start_new_session=os.name != "nt")
     threading.Thread(target=proc.wait, daemon=True).start()  # reap it
+    return 0
 
 
 CHARACTER_PATTERN = "zundamon_jarvis.ui.character_app"  # the overlay's `python -m` module, as pkill -f sees it
@@ -507,8 +509,20 @@ def restart_character(run: Callable[..., Any] = subprocess.run, spawn: Callable[
     return 0
 
 
-def _character_prefs(args: list[str]) -> int | None:
-    """``character hide|show|toggle|avatar <look>|monitor <connector>``, or None for other args."""
+def spawn_character_toggle() -> None:
+    spawn_character("toggle")
+
+
+def character_hidden() -> bool:
+    """Whether the character is out of sight: hidden in the prefs, or (Windows, macOS) not running."""
+    from zundamon_jarvis.ui import character
+
+    return character.load_prefs(character.prefs_path()).hidden or _character_running() is False
+
+
+def _character_prefs(args: list[str], launch: Callable[[], int] = lambda: _character(None)) -> int | None:
+    """``character hide|show|toggle|avatar <look>|monitor <connector>``, or None for other args.
+    ``launch`` starts the character when it is to be shown (the settings window spawns it)."""
     from zundamon_jarvis.ui import character
 
     path = character.prefs_path()
@@ -517,7 +531,7 @@ def _character_prefs(args: list[str]) -> int | None:
         if args == ["toggle"] and _character_running() is False:  # not running: start it, shown
             hidden = False
         character.update_prefs(path, hidden=hidden)
-        return 0 if hidden else _character(None)
+        return 0 if hidden else launch()
     if len(args) == 2 and args[0] == "avatar":
         if args[1] not in character.AVATARS:
             print(t("unknown_avatar", name=args[1], names=", ".join(character.AVATARS)), file=sys.stderr)

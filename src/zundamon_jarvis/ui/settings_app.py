@@ -12,6 +12,7 @@ class ``zundamon-jarvis-settings``). Rows, ↑↓ to move, ←→ to change, Ent
 - Mic: the OS default input or one of the input devices (``pactl``). Saved to config.toml; the
   open stream keeps its device, so it applies when ZundamonJarvis restarts.
 - Pause / Resume: the same toggle as SUPER+ALT+J.
+- Character: show or hide the on-screen character (starting it if it is not running), on every OS.
 - Restart / Update: restart the background service, or run
   ``zundamon-jarvis update --yes`` (git pull + uv sync + restart). Enter twice: the first press
   asks, the second runs it.
@@ -117,6 +118,10 @@ TEXT = {
     "maint.restart_failed": {"ja": "再起動できませんでした: {error}", "en": "Couldn't restart: {error}"},
     "maint.update_done": {"ja": "アップデートが終わりました\n{output}", "en": "The update is done\n{output}"},
     "maint.update_failed": {"ja": "アップデートできませんでした\n{output}", "en": "The update failed\n{output}"},
+    "row.character": {"ja": "キャラクター", "en": "Character"},
+    "character.show": {"ja": "表示する", "en": "Show"},
+    "character.hide": {"ja": "隠す", "en": "Hide"},
+    "hint.character": {"ja": "Enter で画面のキャラクターを表示 / 非表示", "en": "Enter to show or hide the on-screen character"},
     "switch.value": {"ja": "会話をリセット", "en": "Reset conversation"},
     "pause.paused": {"ja": "⏸ 一時停止中 — Enter で再開", "en": "⏸ Paused — Enter to resume"},
     "pause.listening": {"ja": "▶ 聞き取り中", "en": "▶ Listening"},
@@ -309,6 +314,8 @@ class Client(Protocol):
     def preview(self, speaker_id: int, speed: float, text: str) -> str | None: ...
     def toggle(self) -> tuple[View, str | None]: ...
     def new_session(self) -> tuple[View, str | None]: ...
+    def character_hidden(self) -> bool: ...
+    def toggle_character(self) -> bool: ...
     def maintenance(self) -> bool: ...
     def version(self) -> str: ...
     def restart(self) -> str | None: ...
@@ -429,6 +436,20 @@ class SettingsClient:
             return view, None
         return view, _t(f"session.{session}", view.lang, model=model_label(view.model, view.lang))
 
+    def character_hidden(self) -> bool:
+        from zundamon_jarvis.ui import ctl
+
+        return ctl.character_hidden()
+
+    def toggle_character(self) -> bool:
+        """Show the hidden character (starting it if needed) or hide the shown one; whether it is
+        hidden now. The same prefs logic as ``zundamon-jarvisctl character show|hide``."""
+        from zundamon_jarvis.ui import ctl
+
+        hidden = ctl.character_hidden()
+        ctl._character_prefs(["show" if hidden else "hide"], launch=lambda: ctl.spawn_character("show"))
+        return not hidden
+
     def maintenance(self) -> bool:
         """Whether the Restart / Update rows are offered: wherever the services are installed
         (systemd unit, LaunchAgent, or the Windows login entry)."""
@@ -469,7 +490,7 @@ def _row(label: str, value: str) -> Text:
     return Text(f"{label}{pad}{value}")
 
 
-ROWS = ("speed", "voice", "model", "mic", "switch", "pause", "language")
+ROWS = ("speed", "voice", "model", "mic", "switch", "pause", "character", "language")
 MAINT_ROWS = ("restart", "update")  # after ROWS, when ``Client.maintenance()``
 
 
@@ -568,6 +589,7 @@ class SettingsApp(App):
         self._pending = 0  # changes sent, reply not back yet: polls don't overwrite them
         self._preview_timer: Timer | None = None
         self._message = ""
+        self._char_hidden = client.character_hidden()
         self._rows = ROWS + MAINT_ROWS if client.maintenance() else ROWS
         self._version = ""  # loaded on mount (a git call)
         self._armed: str | None = None  # a maintenance row that has had its first Enter
@@ -623,8 +645,9 @@ class SettingsApp(App):
         if self._pending:
             return
         view = await self._call(self._client.load)
+        hidden = await self._call(self._client.character_hidden)
         if not self._pending:
-            self.view = view
+            self.view, self._char_hidden = view, hidden
             self._render_all()
 
     @property
@@ -652,6 +675,8 @@ class SettingsApp(App):
             "pause": _row(_t("row.pause", lang),
                           _t("pause.paused", lang) if v.paused else _t("pause.listening", lang)
                           if v.online else "—"),
+            "character": _row(_t("row.character", lang),
+                              _t("character.show" if self._char_hidden else "character.hide", lang)),
             "language": _row(_t("row.language", lang), f"◂ {LANGUAGE_LABEL.get(lang, lang)} ▸"),
             "restart": _row(_t("row.restart", lang), _t("restart.value", lang)),
             "update": _row(_t("row.update", lang), _t("update.value", lang)),
@@ -668,7 +693,7 @@ class SettingsApp(App):
             hint = mic_note(self.view, self._default_mic, lang)
         elif row == "speed":
             hint = _t("hint.speed", lang, min=f"{SPEED_MIN:.1f}", max=f"{SPEED_MAX:.1f}")
-        elif row in ("voice", "switch", "pause", "language", "restart", "update"):
+        elif row in ("voice", "switch", "pause", "character", "language", "restart", "update"):
             hint = _t(f"hint.{row}", lang)
         else:
             hint = ""
@@ -704,6 +729,9 @@ class SettingsApp(App):
             self.view, msg = await self._call(self._client.toggle)
             self._render_all()
             self._say(msg)
+        elif row == "character":
+            self._char_hidden = await self._call(self._client.toggle_character)
+            self._render_all()
         elif row == "switch":
             self.view, msg = await self._call(self._client.new_session)
             self._render_all()

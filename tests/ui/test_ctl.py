@@ -555,3 +555,32 @@ def test_character_restart_does_nothing_when_none_runs(monkeypatch):
     monkeypatch.setattr(ctl.platform, "system", lambda: "windows")
     assert ctl.restart_character(lambda *a, **k: pytest.fail("no pkill off Linux"), None) == 0
     assert ctl.main(["character", "restart"]) == 0
+
+
+def test_character_show_can_launch_through_a_callback_and_hidden_tells_the_state(character_prefs, monkeypatch):
+    from zundamon_jarvis.ui.character import Prefs, load_prefs, save_prefs
+
+    monkeypatch.setattr(ctl, "_character_running", lambda: None)
+    monkeypatch.setattr(ctl, "_character", lambda preview: pytest.fail("the callback launches it"))
+    save_prefs(character_prefs, Prefs(hidden=True))
+    assert ctl.character_hidden() is True
+    launched = []
+    assert ctl._character_prefs(["show"], launch=lambda: launched.append(1) or 0) == 0
+    assert load_prefs(character_prefs).hidden is False and launched == [1]
+    assert ctl.character_hidden() is False
+    monkeypatch.setattr(ctl, "_character_running", lambda: False)  # not running counts as hidden
+    assert ctl.character_hidden() is True
+
+
+def test_spawn_character_runs_the_ctl_in_the_background(monkeypatch):
+    seen = []
+
+    class Proc:
+        def wait(self):
+            pass
+
+    monkeypatch.setattr(ctl, "_zundamon_jarvisctl", lambda: "ctl")
+    monkeypatch.setattr(ctl.subprocess, "Popen", lambda cmd, **kw: seen.append(cmd) or Proc())
+    ctl.spawn_character("show")
+    ctl.spawn_character_toggle()
+    assert seen == [["ctl", "character", "show"], ["ctl", "character", "toggle"]]
