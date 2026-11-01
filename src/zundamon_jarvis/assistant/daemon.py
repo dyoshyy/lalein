@@ -70,6 +70,7 @@ MIC_RETRY_S = 5.0
 MIC_STALL_S = 3.0  # no frame for this long while listening -> reopen the mic
 MIC_MAX_FAILURES = 3  # in a row -> offline
 DIGITAL_SILENCE_S = 5.0  # all-zero frames this long while listening -> reopen the mic
+SLEEP_GAP_S = 2.0  # wall clock ran this much ahead of the monotonic one between frames -> the machine slept
 SAMPLE_RATE = 16000
 TTS_RETRY_S = 30.0
 TTS_RESOLVE_RETRY_S = 2.0
@@ -83,6 +84,10 @@ class _MicStalled(Exception):
 
 class _MicSilent(Exception):
     """Frames keep arriving but every sample is exactly 0."""
+
+
+class _MicSlept(Exception):
+    """The machine suspended and woke between two frames: the stream is from before the sleep."""
 
 
 class TtsUnavailable(Exception):
@@ -112,6 +117,7 @@ class Daemon:
         mic_stall_s: float = MIC_STALL_S,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         clock: Callable[[], float] = time.monotonic,
+        wall_clock: Callable[[], float] = time.time,
         half_duplex: Callable[[], bool] | None = None,
     ) -> None:
         self._audio = audio
@@ -125,6 +131,7 @@ class Daemon:
         self._hearing_observers = list(hearing_observers)
         self._hearing = False  # the user's speech is being taken in (SpeechStarted..Utterance)
         self._mic_retry_s = mic_retry_s
+        self._wall_clock = wall_clock
         self._mic_stall_s = mic_stall_s
         self._sleep = sleep
         self._mic_failures = 0
@@ -366,6 +373,9 @@ class Daemon:
                 raise
             except _MicStalled:
                 reason = f"no audio for {self._mic_stall_s:g} s"
+            except _MicSlept:
+                log.warning("the system slept; reopening the microphone")
+                reason = "the system slept"
             except _MicSilent:
                 log.warning("microphone delivers digital silence; reopening")
                 reason = f"digital silence for {DIGITAL_SILENCE_S:g} s"
@@ -376,6 +386,7 @@ class Daemon:
 
     async def _read_mic(self) -> None:
         frames = self._audio.frames()
+        last = (self._clock(), self._wall_clock())
         try:
             while True:
                 try:
@@ -389,6 +400,13 @@ class Daemon:
                     raise _MicStalled from None
                 if self.paused:
                     return
+                # Suspend stops the monotonic clock but not the wall clock. USB mics come back
+                # as new devices, so the old stream only delivers zeros: reopen now instead of
+                # waiting out the digital-silence timer.
+                now = (self._clock(), self._wall_clock())
+                if (now[1] - last[1]) - (now[0] - last[0]) > SLEEP_GAP_S:
+                    raise _MicSlept
+                last = now
                 self._update_half_duplex()
                 self._mic_alive(frame)
                 self._frames_seen.add(1.0)

@@ -534,6 +534,24 @@ async def test_digital_silence_for_5s_reopens_the_mic_with_fresh_ears(parts, cap
     await task
 
 
+async def test_waking_from_system_sleep_reopens_the_mic_at_once(parts, caplog):
+    calls, audio, vad, ep, orch, log = parts
+    wall = [1000.0]
+    d = make(parts, mic_retry_s=0.0, wall_clock=lambda: wall[0])
+    task = await started(d)
+    audio.push(frame())
+    await settle(50)
+    calls.clear()
+    wall[0] += 3600  # slept for an hour: the monotonic clock did not move
+    audio.push(frame())
+    await wait_for(lambda: "audio.open" in calls)
+    i = calls.index("audio.close")
+    assert calls[i:i + 4] == ["audio.close", "endpointer.reset", "vad.reset", "audio.open"]
+    assert "the system slept" in caplog.text
+    d.stop()
+    await task
+
+
 async def test_pause_and_resume_restart_the_silence_streak(parts):
     calls, audio, vad, ep, orch, log = parts
     d = make(parts)
