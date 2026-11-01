@@ -1055,7 +1055,7 @@ def test_run_update_on_a_git_checkout_pulls_syncs_and_restarts(tmp_path, monkeyp
     assert code == 0
     assert ran == [["git", "pull", "--ff-only"], ["/bin/uv", "sync"],
                    ["systemctl", "--user", "try-restart", "lalein.service"],
-                   ["/bin/laleinctl", "character", "restart"]]
+                   [str(Path("/bin/zj").with_name("laleinctl")), "character", "restart"]]  # this OS's path
     assert "$ git pull --ff-only" in out
 
 
