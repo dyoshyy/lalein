@@ -289,6 +289,8 @@ def character_prefs(tmp_path, monkeypatch):
 def test_character_hide_and_toggle_only_write_the_prefs(character_prefs, monkeypatch):
     from zundamon_jarvis.ui.character import load_prefs
 
+    monkeypatch.setattr(ctl, "_character_running", lambda: None)  # Linux: whether it runs is not known
+
     monkeypatch.setattr(ctl, "_character", lambda preview: pytest.fail("should not start the overlay"))
     assert ctl.main(["character", "hide"]) == 0
     assert load_prefs(character_prefs).hidden is True
