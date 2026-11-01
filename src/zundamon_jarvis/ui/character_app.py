@@ -4,12 +4,18 @@ GTK4 + gtk4-layer-shell + cairo + Pango (system packages: python-gobject, gtk4, 
 python-cairo). The window is transparent, borderless and above everything; only the character
 itself takes the pointer (the bubble area is click-through):
 
-- drag it to move it (it stays where it is left: ``character.Prefs``),
+- drag it to move it (it stays where it is left: ``character.Prefs``); let go over another
+  monitor and it moves there (on Hyprland, which tells where the pointer is),
 - click it to open / close the conversation window (``zundamon-jarvisctl window watch``),
-- right-click it to switch the speech bubble on / off (remembered too).
+- right-click it for a menu: the speech bubble on / off, its look, the monitor it is on, and
+  hiding it (all remembered too). Starting it again (the app launcher) brings a hidden one back.
+
+``zundamon-jarvisctl character hide|show|toggle|avatar|monitor`` writes the same prefs file; the
+overlay looks at the file every ``POLL_S`` and follows it.
 
 The state comes from the daemon's ``status`` command on the control socket (the same source as
-the bar); the state -> animation mapping is ``zundamon_jarvis.ui.character.pose_for``. The bubble
+the bar); the state -> animation mapping is ``zundamon_jarvis.ui.character.pose_for``, and each
+look is drawn by ``zundamon_jarvis.ui.looks``. The bubble
 and the "I hear you" cue come from the control socket's ``watch`` stream
 (``character.Bubble``; ``hearing`` events).
 
@@ -26,6 +32,7 @@ import subprocess
 import sys
 import threading
 import time
+from dataclasses import replace
 
 import cairo
 import gi
@@ -43,20 +50,26 @@ except (ValueError, ImportError):
 
 from zundamon_jarvis.core.control import request, socket_path  # noqa: E402
 from zundamon_jarvis.ui.character import (  # noqa: E402
+    AVATARS,
     Bubble,
     Line,
-    Pose,
     Prefs,
+    avatar_label,
     bubble_note,
     clamp_margins,
     drag_target,
+    drop_on,
     is_click,
     load_prefs,
+    menu_text,
+    monitor_label,
     normalize,
     pose_for,
     prefs_path,
     save_prefs,
+    update_prefs,
 )
+from zundamon_jarvis.ui.looks import draw_character  # noqa: E402
 
 APP_ID = "dev.dyoshyy.zundamon_jarvis.character"
 NAMESPACE = "zundamon-jarvis-character"
@@ -70,14 +83,14 @@ FPS_MS = 33
 BUBBLE_FONT = "sans 11"
 BUBBLE_PAD = 10
 BUBBLE_LINES = 4
+# The right-click menu caps its own height below its content (with a scrollbar) in a layer-shell
+# window, so it is given room for its longest page: a submenu's "back" row and its items.
+MENU_ROW_PX, MENU_PAD_PX = 34, 24
 # (fill, text) per speaker
 BUBBLE_STYLE = {"me": ((1.0, 1.0, 1.0, 0.96), (0.12, 0.14, 0.25)),
                 "you": ((0.86, 0.96, 0.87, 0.96), (0.10, 0.30, 0.15)),
                 "note": ((0.12, 0.14, 0.25, 0.88), (1.0, 1.0, 1.0))}
 
-BODY = {"normal": (0.45, 0.75, 1.0), "dim": (0.40, 0.50, 0.70), "warm": (1.0, 0.70, 0.40),
-        "grey": (0.60, 0.60, 0.62)}
-INK = (0.12, 0.14, 0.25)
 
 
 class StatePoller:
@@ -128,140 +141,6 @@ class EventStream:
                 pass
             self._send({"kind": "hello"})
             time.sleep(RETRY_S)
-
-
-def draw_character(cr: cairo.Context, w: float, h: float, p: Pose) -> None:
-    r, g, b = BODY[p.tint]
-    cr.save()
-    cr.translate(w / 2, h * 0.92)  # origin at the feet
-    unit = min(w, h * 0.8) / 2
-    cr.rotate(p.sway)
-    cr.translate(0, p.body_dy * unit * 2)
-    cr.scale(1 - p.squash, 1 + p.squash)
-    rx, ry, cy = unit * 0.85, unit * 0.8, -unit * 0.85
-
-    cr.push_group()
-    # antenna
-    cr.set_source_rgb(*INK)
-    cr.set_line_width(3)
-    cr.move_to(0, cy - ry + 4)
-    cr.curve_to(unit * 0.05, cy - ry - unit * 0.2, -unit * 0.05, cy - ry - unit * 0.25, 0,
-                cy - ry - unit * 0.35)
-    cr.stroke()
-    if p.glow:  # hearing: the bulb lights up
-        cr.arc(0, cy - ry - unit * 0.4, 11, 0, 2 * math.pi)
-        cr.set_source_rgba(1.0, 0.9, 0.3, 0.45)
-        cr.fill()
-    cr.arc(0, cy - ry - unit * 0.4, 5, 0, 2 * math.pi)
-    cr.set_source_rgb(1.0, 0.95, 0.5) if p.glow else cr.set_source_rgb(1.0, 0.85, 0.35)
-    cr.fill()
-    # feet
-    cr.set_source_rgb(r * 0.7, g * 0.7, b * 0.7)
-    for fx in (-unit * 0.35, unit * 0.35):
-        cr.save()
-        cr.translate(fx, -unit * 0.06)
-        cr.scale(unit * 0.22, unit * 0.12)
-        cr.arc(0, 0, 1, 0, 2 * math.pi)
-        cr.restore()
-        cr.fill()
-    # body: a rounded blob
-    cr.save()
-    cr.translate(0, cy)
-    cr.scale(rx, ry)
-    cr.arc(0, 0, 1, 0, 2 * math.pi)
-    cr.restore()
-    cr.set_source_rgb(r, g, b)
-    cr.fill_preserve()
-    cr.set_source_rgb(r * 0.6, g * 0.6, b * 0.6)
-    cr.set_line_width(3)
-    cr.stroke()
-    # cheeks
-    cr.set_source_rgba(1.0, 0.55, 0.6, 0.5 if p.tint != "grey" else 0.0)
-    for cx in (-rx * 0.62, rx * 0.62):
-        cr.save()
-        cr.translate(cx, cy + ry * 0.25)
-        cr.scale(unit * 0.14, unit * 0.09)
-        cr.arc(0, 0, 1, 0, 2 * math.pi)
-        cr.restore()
-        cr.fill()
-    # eyes
-    ey = cy - ry * 0.12
-    for ex in (-rx * 0.38, rx * 0.38):
-        cr.set_source_rgb(*INK)
-        cr.set_line_width(3)
-        if p.x_eyes:
-            d = unit * 0.08
-            cr.move_to(ex - d, ey - d); cr.line_to(ex + d, ey + d)
-            cr.move_to(ex + d, ey - d); cr.line_to(ex - d, ey + d)
-            cr.stroke()
-        elif p.eye_open < 0.15:  # shut: a small arc
-            cr.arc(ex, ey, unit * 0.09, 0.15 * math.pi, 0.85 * math.pi)
-            cr.stroke()
-        else:
-            cr.save()
-            cr.translate(ex, ey + p.eye_look_y * unit * 0.06)
-            cr.scale(unit * 0.09, unit * 0.12 * p.eye_open)
-            cr.arc(0, 0, 1, 0, 2 * math.pi)
-            cr.restore()
-            cr.fill()
-            cr.set_source_rgb(1, 1, 1)  # glint
-            cr.arc(ex + unit * 0.03, ey - unit * 0.04 + p.eye_look_y * unit * 0.06, 2.2, 0,
-                   2 * math.pi)
-            cr.fill()
-    # mouth
-    my = cy + ry * 0.35
-    cr.set_source_rgb(*INK)
-    cr.set_line_width(3)
-    if p.mouth_open > 0.08:
-        cr.save()
-        cr.translate(0, my)
-        cr.scale(unit * 0.14, unit * (0.03 + 0.14 * p.mouth_open))
-        cr.arc(0, 0, 1, 0, 2 * math.pi)
-        cr.restore()
-        cr.fill()
-    elif p.mouth_flat:
-        cr.move_to(-unit * 0.1, my + 2)
-        cr.curve_to(-unit * 0.04, my - 3, unit * 0.04, my + 5, unit * 0.1, my)
-        cr.stroke()
-    else:
-        cr.arc(0, my - unit * 0.06, unit * 0.12, 0.2 * math.pi, 0.8 * math.pi)
-        cr.stroke()
-    # sweat drop
-    if p.sweat:
-        cr.set_source_rgba(0.5, 0.8, 1.0, 0.9)
-        sx, sy = rx * 0.75, cy - ry * 0.45
-        cr.move_to(sx, sy - 9)
-        cr.curve_to(sx + 7, sy + 2, sx + 5, sy + 9, sx, sy + 9)
-        cr.curve_to(sx - 5, sy + 9, sx - 7, sy + 2, sx, sy - 9)
-        cr.fill()
-    # hearing: sound waves travel out from both sides of the head
-    if p.waves >= 0:
-        cr.set_line_width(3)
-        for k in range(2):
-            phase = (p.waves + k * 0.5) % 1.0
-            d = rx + unit * 0.1 + phase * unit * 0.3
-            cr.set_source_rgba(0.95, 0.55, 0.2, 0.9 * (1 - phase))
-            for side in (-1, 1):
-                start = -0.25 * math.pi if side > 0 else 0.75 * math.pi
-                cr.new_sub_path()
-                cr.arc(0, cy, d, start, start + 0.5 * math.pi)
-                cr.stroke()
-    cr.pop_group_to_source()
-    cr.paint_with_alpha(p.alpha)
-    # thinking dots and sleep z live in the unrotated frame, above the head
-    cr.restore()
-    top = h * 0.92 - unit * 2.2  # beside the antenna, inside the window
-    if p.dots:
-        cr.set_source_rgba(*INK, 0.8)
-        for i in range(p.dots):
-            cr.arc(w / 2 + 22 + i * 15, top, 5, 0, 2 * math.pi)
-            cr.fill()
-    if p.zzz >= 0:
-        cr.set_source_rgba(0.85, 0.9, 1.0, 1 - p.zzz)
-        cr.select_font_face("sans-serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
-        cr.set_font_size(16 + 10 * p.zzz)
-        cr.move_to(w / 2 + 22 + 25 * p.zzz, top + 16 - 14 * p.zzz)
-        cr.show_text("z")
 
 
 def _rounded(cr: cairo.Context, x: float, y: float, w: float, h: float, r: float) -> None:
@@ -346,7 +225,17 @@ def open_watch_window() -> None:
     threading.Thread(target=proc.wait, daemon=True).start()  # reap it
 
 
-def build_window(app: Gtk.Application, forced_state: str | None = None) -> Gtk.Window:
+def monitors(display: Gdk.Display) -> list[Gdk.Monitor]:
+    model = display.get_monitors()
+    return [model.get_item(i) for i in range(model.get_n_items())]
+
+
+def _variant(s: str) -> GLib.Variant:
+    return GLib.Variant.new_string(s)
+
+
+def build_window(app: Gtk.Application, forced_state: str | None = None,
+                 forced_avatar: str | None = None) -> Gtk.Window:
     poller = None if forced_state else StatePoller()
     bubble = Bubble()
     hearing = {"on": False}
@@ -387,7 +276,8 @@ def build_window(app: Gtk.Application, forced_state: str | None = None) -> Gtk.W
         cr.save()
         cr.translate(CHAR_X, CHAR_Y)
         draw_character(cr, CHAR_W, CHAR_H,
-                       pose_for(state, now - start, hearing=hearing["on"] or forced_state == "hearing"))
+                       pose_for(state, now - start, hearing=hearing["on"] or forced_state == "hearing"),
+                       forced_avatar or prefs.avatar)
         cr.restore()
 
     area.set_draw_func(on_draw)
@@ -411,9 +301,16 @@ def build_window(app: Gtk.Application, forced_state: str | None = None) -> Gtk.W
         for edge in (LayerShell.Edge.BOTTOM, LayerShell.Edge.RIGHT):
             LayerShell.set_anchor(win, edge, True)
 
-    def screen() -> tuple[int, int] | None:
+    def chosen_monitor() -> Gdk.Monitor | None:
+        """The monitor the prefs name, if it is connected."""
+        return next((m for m in monitors(win.get_display()) if m.get_connector() == prefs.monitor), None)
+
+    def current_monitor() -> Gdk.Monitor | None:
         surface = win.get_surface()
-        monitor = surface and win.get_display().get_monitor_at_surface(surface)
+        return (layered and chosen_monitor()) or (surface and win.get_display().get_monitor_at_surface(surface))
+
+    def screen() -> tuple[int, int] | None:
+        monitor = current_monitor()
         if not monitor:
             return None
         geo = monitor.get_geometry()
@@ -427,8 +324,63 @@ def build_window(app: Gtk.Application, forced_state: str | None = None) -> Gtk.W
             LayerShell.set_margin(win, LayerShell.Edge.BOTTOM, b)
         return r, b
 
+    if layered:
+        LayerShell.set_monitor(win, chosen_monitor())
     place(prefs.right, prefs.bottom)
     win.connect("map", lambda _w: place(prefs.right, prefs.bottom))  # clamp once the monitor is known
+
+    # the prefs: changed here (drag, menu) or in the file (zundamon-jarvisctl character ...)
+    actions = Gio.SimpleActionGroup()
+    bubble_action = Gio.SimpleAction.new_stateful("bubble", None, GLib.Variant.new_boolean(prefs.bubble))
+    avatar_action = Gio.SimpleAction.new_stateful("avatar", GLib.VariantType.new("s"), _variant(prefs.avatar))
+    monitor_action = Gio.SimpleAction.new_stateful("monitor", GLib.VariantType.new("s"),
+                                                   _variant(prefs.monitor or ""))
+    hide_action = Gio.SimpleAction.new("hide", None)
+    for action in (bubble_action, avatar_action, monitor_action, hide_action):
+        actions.add_action(action)
+    area.insert_action_group("character", actions)
+
+    def apply(new: Prefs) -> None:
+        nonlocal prefs
+        old, prefs = prefs, new
+        if layered and new.monitor != old.monitor:
+            LayerShell.set_monitor(win, chosen_monitor())
+        if (new.right, new.bottom, new.monitor) != (old.right, old.bottom, old.monitor):
+            place(new.right, new.bottom)
+        if new.bubble != old.bubble:
+            bubble.note(bubble_note(new.bubble), time.monotonic())
+        if new.hidden != old.hidden and not forced_state:  # a preview stays up
+            win.set_visible(not new.hidden)
+        bubble_action.set_state(GLib.Variant.new_boolean(new.bubble))
+        avatar_action.set_state(_variant(new.avatar))
+        monitor_action.set_state(_variant(new.monitor or ""))
+
+    def stat() -> tuple[int, int] | None:
+        try:
+            st = path.stat()
+        except OSError:
+            return None
+        return st.st_mtime_ns, st.st_size
+
+    seen = {"stat": stat()}
+
+    def change(**changes) -> None:
+        new = replace(prefs, **changes)
+        save_prefs(path, new)
+        seen["stat"] = stat()
+        apply(new)
+
+    def follow_file() -> bool:
+        if (now := stat()) != seen["stat"]:
+            seen["stat"] = now
+            apply(load_prefs(path))
+        return True
+
+    GLib.timeout_add(int(POLL_S * 1000), follow_file)
+    bubble_action.connect("change-state", lambda _a, v: change(bubble=v.get_boolean()))
+    avatar_action.connect("change-state", lambda _a, v: change(avatar=v.get_string()))
+    monitor_action.connect("change-state", lambda _a, v: change(monitor=v.get_string() or None))
+    hide_action.connect("activate", lambda _a, _v: change(hidden=True))
 
     # drag = move, click = watch window. On Hyprland the pointer is read in screen coordinates
     # (``drag_target``). Elsewhere the gesture's offsets, which are relative to the moving
@@ -458,15 +410,24 @@ def build_window(app: Gtk.Application, forced_state: str | None = None) -> Gtk.W
         moving["moved"] = (r0 - r, b0 - b)
 
     def on_end(_g, ox: float, oy: float) -> None:
-        nonlocal prefs
         area.set_cursor(Gdk.Cursor.new_from_name("pointer"))
         if not moving["dragged"]:
             open_watch_window()
             return
         r0, b0 = moving["start"]
         mx, my = moving["moved"]
-        prefs = Prefs(right=int(r0 - mx), bottom=int(b0 - my), bubble=prefs.bubble)
-        save_prefs(path, prefs)
+        on = current_monitor()
+        pointer = moving["pointer"] is not None and layered and on and hypr_cursor()
+        if pointer:  # let go over another monitor: it moves there (the layer surface can't span two)
+            rects = {}
+            for m in monitors(win.get_display()):
+                g = m.get_geometry()
+                rects[m.get_connector()] = (g.x, g.y, g.width, g.height)
+            if dropped := drop_on((r0, b0), on.get_connector(), moving["pointer"], pointer, (WIDTH, HEIGHT), rects):
+                name, r, b = dropped
+                change(right=r, bottom=b, monitor=name)
+                return
+        change(right=int(r0 - mx), bottom=int(b0 - my))
 
     drag.connect("drag-begin", on_begin)
     drag.connect("drag-update", on_update)
@@ -475,11 +436,47 @@ def build_window(app: Gtk.Application, forced_state: str | None = None) -> Gtk.W
 
     right_click = Gtk.GestureClick(button=Gdk.BUTTON_SECONDARY)
 
-    def on_right_click(_g, _n, _x, _y) -> None:
-        nonlocal prefs
-        prefs = Prefs(right=prefs.right, bottom=prefs.bottom, bubble=not prefs.bubble)
-        save_prefs(path, prefs)
-        bubble.note(bubble_note(prefs.bubble), time.monotonic())
+    def menu_model() -> Gio.Menu:
+        menu = Gio.Menu()
+        menu.append(menu_text("menu.bubble"), "character.bubble")
+        looks = Gio.Menu()
+        for avatar in AVATARS:
+            item = Gio.MenuItem.new(avatar_label(avatar), None)
+            item.set_action_and_target_value("character.avatar", _variant(avatar))
+            looks.append_item(item)
+        menu.append_submenu(menu_text("menu.avatar"), looks)
+        screens = monitors(win.get_display())
+        if layered and len(screens) > 1:
+            where = Gio.Menu()
+            for m in screens:
+                item = Gio.MenuItem.new(monitor_label(m.get_connector(), m.get_model(), m.get_description()), None)
+                item.set_action_and_target_value("character.monitor", _variant(m.get_connector()))
+                where.append_item(item)
+            menu.append_submenu(menu_text("menu.monitor"), where)
+        end = Gio.Menu()
+        end.append(menu_text("menu.hide"), "character.hide")
+        menu.append_section(None, end)
+        return menu
+
+    popover = Gtk.PopoverMenu.new_from_model(None)
+    popover.set_parent(area)
+    popover.set_has_arrow(False)
+    # the menu needs the keyboard while it is open (layer-shell: none otherwise)
+    popover.connect("closed", lambda _p: layered and LayerShell.set_keyboard_mode(
+        win, LayerShell.KeyboardMode.NONE))
+
+    def on_right_click(_g, _n, x: float, y: float) -> None:
+        on = current_monitor()  # tick where it is now, even when the compositor chose
+        monitor_action.set_state(_variant(prefs.monitor or (on.get_connector() if on else "")))
+        popover.set_menu_model(menu_model())
+        rows = max(4, 1 + len(AVATARS), 1 + len(monitors(win.get_display())))
+        popover.set_size_request(-1, rows * MENU_ROW_PX + MENU_PAD_PX)
+        rect = Gdk.Rectangle()
+        rect.x, rect.y, rect.width, rect.height = int(x), int(y), 1, 1
+        popover.set_pointing_to(rect)
+        if layered:
+            LayerShell.set_keyboard_mode(win, LayerShell.KeyboardMode.ON_DEMAND)
+        popover.popup()
 
     right_click.connect("released", on_right_click)
     area.add_controller(right_click)
@@ -488,15 +485,18 @@ def build_window(app: Gtk.Application, forced_state: str | None = None) -> Gtk.W
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    # preview a state (or "hearing": listening with the hearing cue)
+    # preview a state (or "hearing": listening with the hearing cue), optionally in a look
     forced = args[0] if args and (normalize(args[0]) == args[0] or args[0] == "hearing") else None
+    look = args[1] if forced and len(args) > 1 and args[1] in AVATARS else None
     # One character: launching it again (the app launcher) just brings it back to the front.
     # A preview is its own instance, next to a running character.
     app = Gtk.Application(application_id=APP_ID, flags=Gio.ApplicationFlags.NON_UNIQUE
                           if forced else Gio.ApplicationFlags.DEFAULT_FLAGS)
 
     def activate(a: Gtk.Application) -> None:
-        (a.get_windows() or [build_window(a, forced)])[0].present()
+        if not forced and load_prefs(prefs_path()).hidden:  # started again: come back
+            update_prefs(prefs_path(), hidden=False)
+        (a.get_windows() or [build_window(a, forced, look)])[0].present()
 
     app.connect("activate", activate)
     return app.run([])

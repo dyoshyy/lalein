@@ -3,7 +3,9 @@ import math
 import pytest
 
 from zundamon_jarvis.ui.character import (
+    AVATARS,
     CLICK_SLOP_PX,
+    DEFAULT_AVATAR,
     LINGER_S,
     MIN_SHOW_S,
     NOTE_S,
@@ -12,13 +14,19 @@ from zundamon_jarvis.ui.character import (
     Bubble,
     Line,
     Prefs,
+    avatar_label,
+    body_rgb,
     clamp_margins,
     drag_target,
+    drop_on,
     is_click,
+    menu_text,
+    monitor_label,
     load_prefs,
     normalize,
     pose_for,
     save_prefs,
+    update_prefs,
 )
 
 
@@ -190,6 +198,45 @@ def test_prefs_round_trip_and_survive_junk(tmp_path):
     assert load_prefs(path) == Prefs(bottom=0)
 
 
+def test_prefs_keep_the_avatar_the_monitor_and_whether_it_is_hidden(tmp_path):
+    path = tmp_path / "character.json"
+    prefs = Prefs(right=5, bottom=6, bubble=True, avatar="cat", monitor="DP-2", hidden=True)
+    save_prefs(path, prefs)
+    assert load_prefs(path) == prefs
+    path.write_text('{"right": 1, "bottom": 2, "bubble": false}', encoding="utf-8")  # an older file
+    assert load_prefs(path) == Prefs(right=1, bottom=2, bubble=False, avatar=DEFAULT_AVATAR, monitor=None,
+                                     hidden=False)
+    path.write_text('{"avatar": "dragon", "monitor": 3, "hidden": "yes"}', encoding="utf-8")
+    assert load_prefs(path) == Prefs()
+
+
+def test_update_prefs_changes_only_what_it_is_given(tmp_path):
+    path = tmp_path / "character.json"
+    save_prefs(path, Prefs(right=120, bottom=40, avatar="ghost"))
+    assert update_prefs(path, hidden=True) == Prefs(right=120, bottom=40, avatar="ghost", hidden=True)
+    assert load_prefs(path) == Prefs(right=120, bottom=40, avatar="ghost", hidden=True)
+    assert update_prefs(tmp_path / "new" / "character.json", monitor="HDMI-A-1") == Prefs(monitor="HDMI-A-1")
+
+
+def test_the_first_avatar_is_the_original_and_there_are_others():
+    assert AVATARS[0] == DEFAULT_AVATAR == "bot"
+    assert len(AVATARS) >= 5 and len(set(AVATARS)) == len(AVATARS)
+
+
+@pytest.mark.parametrize("avatar", AVATARS)
+def test_every_avatar_has_a_colour_per_tint_and_a_name_per_language(avatar):
+    colours = {tint: body_rgb(avatar, tint) for tint in ("normal", "dim", "warm", "grey")}
+    assert all(len(c) == 3 and all(0.0 <= v <= 1.0 for v in c) for c in colours.values())
+    assert len(set(colours.values())) == 4  # every state looks different
+    assert avatar_label(avatar, "ja") and avatar_label(avatar, "en")
+
+
+def test_avatars_differ_when_awake_and_look_alike_offline():
+    assert len({body_rgb(a, "normal") for a in AVATARS}) == len(AVATARS)
+    assert len({body_rgb(a, "grey") for a in AVATARS}) == 1
+    assert body_rgb("dragon", "normal") == body_rgb(DEFAULT_AVATAR, "normal")  # unknown: the default
+
+
 def test_dragging_follows_the_pointer_on_the_screen():
     # pointer moved 30 right, 10 down: the right / bottom margins shrink by as much
     assert drag_target((100, 200), (500.0, 400.0), (530.0, 410.0)) == (70.0, 190.0)
@@ -202,3 +249,34 @@ def test_bubble_note_follows_the_display_language():
     assert bubble_note(True, "en") == "Speech bubble: on"
     assert bubble_note(False, "ja") == "吹き出し: オフ"
     assert bubble_note(True) == "吹き出し: オン"  # the tests' display language
+
+
+def test_monitors_are_named_by_model_and_connector():
+    assert monitor_label("DP-1", "MAG325CQRF-QD", "Microstep MAG325CQRF-QD (DP-1)") == "MAG325CQRF-QD (DP-1)"
+    assert monitor_label("HDMI-A-1", "0x1920", "Invalid Vendor Codename - RTK 0x1920") == "HDMI-A-1"
+    assert monitor_label("eDP-1", None, None) == "eDP-1"
+
+
+def test_menu_follows_the_display_language():
+    assert menu_text("menu.avatar", "en") == "Look"
+    assert menu_text("menu.avatar") == "見た目"
+
+
+# DP-1 2560x1440 at (1920, 0); DP-2 1080x1920 (portrait) at (840, 0), to its left
+SCREENS = {"DP-1": (1920, 0, 2560, 1440), "DP-2": (840, 0, 1080, 1920)}
+
+
+def test_dropping_on_the_same_monitor_follows_the_pointer():
+    # 30 left and 10 up: the margins from the bottom-right corner grow by as much
+    assert drop_on((100, 200), "DP-1", (3000.0, 900.0), (2970.0, 890.0), (300, 290), SCREENS) == ("DP-1", 130, 210)
+
+
+def test_dropping_on_another_monitor_moves_it_there_under_the_pointer():
+    # the window's top-left was at (1920 + 2560 - 100 - 300, 1440 - 200 - 290) = (4080, 950);
+    # the pointer went 3000 left: (1080, 950) on DP-2 -> right 1920 - 1380, bottom 1920 - 1240
+    assert drop_on((100, 200), "DP-1", (4100.0, 1000.0), (1100.0, 1000.0), (300, 290), SCREENS) == ("DP-2", 540, 680)
+
+
+def test_a_drop_outside_every_monitor_stays_on_the_same_one_and_on_screen():
+    assert drop_on((100, 200), "DP-1", (4100.0, 1000.0), (9999.0, 1000.0), (300, 290), SCREENS) == ("DP-1", 0, 200)
+    assert drop_on((100, 200), "gone", (0.0, 0.0), (5.0, 5.0), (300, 290), SCREENS) is None
