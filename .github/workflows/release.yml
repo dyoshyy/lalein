@@ -1,0 +1,51 @@
+# Publishes a GitHub release when a version tag is pushed. The installers and `zundamon-jarvis
+# update` install the latest release's source zip, so nothing is built or uploaded: the release
+# only has to exist, with a tag that matches the package version (an update compares the two;
+# a mismatch would offer the same update forever).
+#
+#   1. bump `version` in pyproject.toml, run `uv lock`, merge to main
+#   2. git tag -a vX.Y.Z -m "<release notes>" && git push origin vX.Y.Z
+#
+# The tag's message becomes the release notes (GitHub's generated notes if it has none).
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches pyproject.toml's version
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME but pyproject.toml says $version: bump the version (and uv lock) first"
+            exit 1
+          fi
+
+  test:
+    uses: ./.github/workflows/test.yml
+
+  publish:
+    needs: [version, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the tag's message
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          notes=$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")
+          if [ -n "$notes" ]; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes "$notes"
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
+          fi
