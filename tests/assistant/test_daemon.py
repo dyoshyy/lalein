@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from fakes import settle
-from zundamon_jarvis.assistant.daemon import (
+from lalein.assistant.daemon import (
     DIGITAL_SILENCE_S,
     EXIT_AUDIO_STUCK,
     HALF_DUPLEX_TAIL_S,
@@ -20,7 +20,7 @@ from zundamon_jarvis.assistant.daemon import (
     TtsWatch,
     duplex_check,
 )
-from zundamon_jarvis.voice.endpoint import SpeechStarted, Utterance
+from lalein.voice.endpoint import SpeechStarted, Utterance
 
 
 class Calls(list):
@@ -757,7 +757,7 @@ async def test_guarded_speak_marks_offline_when_voicevox_is_gone():
 
 @pytest.mark.integration
 async def test_watch_against_the_real_engine():
-    from zundamon_jarvis.voice.tts import DEFAULT_SPEAKER, Voicevox
+    from lalein.voice.tts import DEFAULT_SPEAKER, Voicevox
 
     vv = Voicevox()
     flags = []
@@ -801,7 +801,7 @@ async def test_guarded_speak_never_speaks_with_an_unresolved_speaker():
 
 
 async def test_guarded_synth_refuses_an_unresolved_speaker():
-    from zundamon_jarvis.assistant.daemon import TtsUnavailable
+    from lalein.assistant.daemon import TtsUnavailable
 
     synthesized = []
 
@@ -839,7 +839,7 @@ async def test_a_successful_speak_clears_offline():
 # ---- startup ----
 
 def test_already_running_exits_3_before_loading_anything(monkeypatch):
-    import zundamon_jarvis.assistant.daemon as daemon_module
+    import lalein.assistant.daemon as daemon_module
 
     async def must_not_run(*a, **kw):
         raise AssertionError("_amain must not run")
@@ -856,18 +856,18 @@ def test_already_running_check_skips_the_heavy_imports(tmp_path):
 
     if sys.platform == "win32":  # the endpoint is control.json (port + token) in LOCALAPPDATA
         srv = socket.create_server(("127.0.0.1", 0))
-        run_dir = tmp_path / "zundamon-jarvis" / "run"
+        run_dir = tmp_path / "lalein" / "run"
         run_dir.mkdir(parents=True)
         (run_dir / "control.json").write_text(
             json.dumps({"port": srv.getsockname()[1], "token": "t"}), encoding="utf-8")
         env = {"LOCALAPPDATA": str(tmp_path)}
     else:
         srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        srv.bind(str(tmp_path / "zundamon-jarvis.sock"))
+        srv.bind(str(tmp_path / "lalein.sock"))
         srv.listen(1)
         env = {"XDG_RUNTIME_DIR": str(tmp_path)}
     try:
-        code = ("import sys; from zundamon_jarvis.assistant.daemon import main; r = main([]); "
+        code = ("import sys; from lalein.assistant.daemon import main; r = main([]); "
                 "print(r, [m for m in ('faster_whisper', 'onnxruntime', 'sounddevice', "
                 "'claude_agent_sdk') if m in sys.modules])")
         out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
@@ -932,7 +932,7 @@ async def test_unmute_mid_utterance_tells_the_orchestrator(parts, caplog):
     ep.in_speech = True
     orch.user_talking = True
     d.set_ears_muted(True)
-    with caplog.at_level(logging.INFO, logger="zundamon_jarvis.assistant.daemon"):
+    with caplog.at_level(logging.INFO, logger="lalein.assistant.daemon"):
         d.set_ears_muted(False)
     assert orch.abandoned == 1 and not ep.in_speech
     msgs = " | ".join(r.getMessage() for r in caplog.records)
@@ -965,7 +965,7 @@ async def test_a_cut_utterance_resets_the_vad_and_warns(parts, caplog):
     d = make(parts)
     task = await started(d)
     calls.clear()
-    with caplog.at_level(logging.INFO, logger="zundamon_jarvis.assistant.daemon"):
+    with caplog.at_level(logging.INFO, logger="lalein.assistant.daemon"):
         audio.push(frame(0.9, [Utterance(np.zeros(16000 * 30, np.float32), cut=True)]))
         await settle()
     assert "vad.reset" in calls and len(orch.utterances) == 1
@@ -980,7 +980,7 @@ async def test_speech_events_are_logged(parts, caplog):
     calls, audio, vad, ep, orch, log = parts
     d = make(parts)
     task = await started(d)
-    with caplog.at_level(logging.INFO, logger="zundamon_jarvis.assistant.daemon"):
+    with caplog.at_level(logging.INFO, logger="lalein.assistant.daemon"):
         audio.push(frame(0.9, [SpeechStarted()]))
         audio.push(frame(0.1, [Utterance(np.zeros(16000, np.float32))]))
         await settle()
@@ -1009,7 +1009,7 @@ async def test_long_speech_and_long_user_talking_warn_once(parts, caplog):
     await settle()
     ep.in_speech = True
     orch.user_talking = True
-    with caplog.at_level(logging.WARNING, logger="zundamon_jarvis.assistant.daemon"):
+    with caplog.at_level(logging.WARNING, logger="lalein.assistant.daemon"):
         audio.push(frame(0.9))
         await settle()
         clock.t += 31
@@ -1056,8 +1056,8 @@ async def test_debug_and_ears_reset_work_with_the_real_endpointer_and_orchestrat
     import json
 
     from fakes import FakeSpeaker
-    from zundamon_jarvis.assistant.orchestrator import Orchestrator
-    from zundamon_jarvis.voice.endpoint import Endpointer
+    from lalein.assistant.orchestrator import Orchestrator
+    from lalein.voice.endpoint import Endpointer
 
     calls, audio, vad, _, _, log = parts
     speaker = FakeSpeaker()

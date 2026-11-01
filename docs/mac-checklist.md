@@ -1,6 +1,6 @@
 # Mac で試すときのチェックリスト
 
-ずんだもんジャーヴィス（zundamon-jarvis）を Mac に入れて、ひととおり動くか確かめるための手順です。
+ラレイン（lalein）を Mac に入れて、ひととおり動くか確かめるための手順です。
 上から順に進めて、各手順の「こうなれば OK」と同じになるかを見てください。
 うまくいかないところがあれば、そこで止めて、最後の「うまくいかないとき」の手順で様子を送ってください。
 
@@ -22,13 +22,13 @@
 ターミナル（アプリケーション > ユーティリティ > ターミナル）を開いて、次の 1 行を貼り付けて Enter を押します。
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dyoshyy/zundamon-jarvis/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/dyoshyy/lalein/main/install.sh | sh
 ```
 
 `==> …` という行が順に出て、本体が入ります（数分です）。
 途中で止まった場合は、同じ 1 行をもう一度実行すれば、終わったところは飛ばして続きから進みます。
 
-最後に**ブラウザで設定の画面**が開きます（`zundamon-jarvis setup`）。開かないときは、ターミナルに出ている
+最後に**ブラウザで設定の画面**が開きます（`lalein setup`）。開かないときは、ターミナルに出ている
 `http://127.0.0.1:…` で始まる URL を Safari などに貼り付けてください。設定が終わるまで、ターミナルは閉じないでください。
 画面の左の手順に沿って進めます。
 
@@ -59,7 +59,7 @@ curl -fsSL https://raw.githubusercontent.com/dyoshyy/zundamon-jarvis/main/instal
 > 「直したので、もう一度確かめる」を押します。
 >
 > ブラウザを使わずにターミナルだけで設定したいときは、`ZJ_CLI=1` を付けて実行します
-> （`curl -fsSL https://raw.githubusercontent.com/dyoshyy/zundamon-jarvis/main/install.sh | ZJ_CLI=1 sh`）。
+> （`curl -fsSL https://raw.githubusercontent.com/dyoshyy/lalein/main/install.sh | ZJ_CLI=1 sh`）。
 > 質問に番号や `y` で答えていく形になります。
 
 ## 2. ヘッドホンで話しかける
@@ -131,7 +131,7 @@ Resume で ▶ に戻り、また話を聞くようになる。
 ターミナルで次を実行すると、様子をまとめたもの（診断結果）がクリップボードにコピーされます。
 
 ```sh
-zundamon-jarvis doctor | pbcopy
+lalein doctor | pbcopy
 ```
 
 それをメッセージに貼り付けて、**どの手順で、何をしたら、どうなったか**をひとこと添えて送ってください。
@@ -145,7 +145,7 @@ zundamon-jarvis doctor | pbcopy
 ## 外したいとき
 
 ```sh
-zundamon-jarvis uninstall
+lalein uninstall
 ```
 
 常駐を止めて自動起動を外し、声のエンジンと設定を消すかを聞きます。最後に本体を外すコマンドが出ます。

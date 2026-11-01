@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 
 from helpers import resample_24k_to_16k
-from zundamon_jarvis.voice.tts import Voicevox
-from zundamon_jarvis.voice.vad import SileroVad
+from lalein.voice.tts import Voicevox
+from lalein.voice.vad import SileroVad
 
 FRAME = 512
 
@@ -61,9 +61,9 @@ def test_vad_model_is_packaged():
     import sys
     from importlib import resources
 
-    from zundamon_jarvis.voice import vad
+    from lalein.voice import vad
 
-    asset = resources.files("zundamon_jarvis") / "assets" / "silero_vad_v6.onnx"
+    asset = resources.files("lalein") / "assets" / "silero_vad_v6.onnx"
     assert asset.is_file()
     assert vad._model_path() == str(asset)
     assert "faster_whisper" not in vad._model_path()

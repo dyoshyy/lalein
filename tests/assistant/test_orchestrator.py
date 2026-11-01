@@ -3,9 +3,9 @@ from datetime import datetime, timezone
 
 import numpy as np
 
-import zundamon_jarvis.assistant.orchestrator as orchestrator_module
+import lalein.assistant.orchestrator as orchestrator_module
 from fakes import BrainFactory, FakeBrain, FakeClock, FakeSpeaker, settle
-from zundamon_jarvis.assistant.brain import (
+from lalein.assistant.brain import (
     AuthProblem,
     PermissionRequest,
     TaskDone,
@@ -14,14 +14,14 @@ from zundamon_jarvis.assistant.brain import (
     TurnEnd,
     UsageLimit,
 )
-from zundamon_jarvis.assistant.orchestrator import (
+from lalein.assistant.orchestrator import (
     FILLERS,
     LIMIT_NOTICE,
     Orchestrator,
     OrchestratorConfig,
     SynthSpeaker,
 )
-from zundamon_jarvis.assistant.policy import describe_action
+from lalein.assistant.policy import describe_action
 
 CAL_TOOL = "mcp__claude_ai_Google_Calendar__create_event"
 CAL_INPUT = {"summary": "ジム", "start": {"dateTime": "2026-10-25T08:30:00+09:00"}}
@@ -741,7 +741,7 @@ async def test_restart_session_refuses_while_anything_is_under_way():
 
 
 def test_language_detection_for_spoken_lines():
-    from zundamon_jarvis.assistant.orchestrator import _is_japanese
+    from lalein.assistant.orchestrator import _is_japanese
     assert _is_japanese("明日の予定は？") and _is_japanese("ok これ")
     assert not _is_japanese("What is on my calendar?")
 
@@ -799,7 +799,7 @@ async def test_dropped_utterances_are_logged(caplog):
     import logging
 
     rig = Rig()
-    with caplog.at_level(logging.INFO, logger="zundamon_jarvis.assistant.orchestrator"):
+    with caplog.at_level(logging.INFO, logger="lalein.assistant.orchestrator"):
         await rig.say("")
         await rig.say("ご視聴ありがとうございました")
         await rig.orch.pause()
@@ -844,7 +844,7 @@ async def test_stale_auth_flag_is_cleared_with_a_new_brain():
     assert rig.orch._auth_seen is False
 
 
-# ---- logs never carry what was said (they end up in `zundamon-jarvis doctor`) ----
+# ---- logs never carry what was said (they end up in `lalein doctor`) ----
 
 def _log_text(caplog) -> str:
     out = []
@@ -865,7 +865,7 @@ async def test_speak_failure_log_has_no_text(caplog):
         raise RuntimeError(f"http://127.0.0.1:50021/audio_query?text={text}")
 
     rig.orch._speak = broken
-    with caplog.at_level(logging.INFO, logger="zundamon_jarvis.assistant.orchestrator"):
+    with caplog.at_level(logging.INFO, logger="lalein.assistant.orchestrator"):
         await rig.say("こんにちは")
         await settle()
     msgs = _log_text(caplog)
@@ -877,7 +877,7 @@ async def test_failed_event_and_unanswered_confirmation_logs_have_no_text(caplog
 
     decisions: list[bool] = []
     rig = Rig(FakeBrain([[calendar_request(decisions)]]))
-    with caplog.at_level(logging.INFO, logger="zundamon_jarvis.assistant.orchestrator"):
+    with caplog.at_level(logging.INFO, logger="lalein.assistant.orchestrator"):
         await rig.say("ジムの予定を入れて")
         await rig.clock.advance(20)
         monkeypatch.setattr(rig.orch, "_on_event", lambda ev: 1 / 0)

@@ -3,7 +3,7 @@ import time
 
 import numpy as np
 
-from zundamon_jarvis.voice.player import Player
+from lalein.voice.player import Player
 
 
 class FakeStream:

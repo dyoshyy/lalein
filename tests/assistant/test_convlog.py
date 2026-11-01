@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
-from zundamon_jarvis.assistant.convlog import (
+from lalein.assistant.convlog import (
     ConversationLog,
     legacy_log_dir,
     log_dir,
@@ -122,7 +122,7 @@ def test_log_dir_is_created(tmp_path):
 @pytest.mark.skipif(sys.platform == "win32", reason="XDG_STATE_HOME is where Linux keeps the logs")
 def test_log_dirs_follow_xdg_state_home(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    assert log_dir() == tmp_path / "zundamon-jarvis"
+    assert log_dir() == tmp_path / "lalein"
     assert legacy_log_dir() == tmp_path / "jarvis"
 
 
@@ -131,7 +131,7 @@ def test_migrate_moves_the_legacy_logs_and_removes_the_empty_dir(tmp_path):
     legacy.mkdir()
     (legacy / "2026-10-23.jsonl").write_text('{"heard": "a"}\n', encoding="utf-8")
     (legacy / "2026-10-24.jsonl").write_text('{"heard": "b"}\n', encoding="utf-8")
-    new = tmp_path / "zundamon-jarvis"
+    new = tmp_path / "lalein"
     moved = migrate_legacy_logs(new, legacy)
     assert sorted(p.name for p in moved) == ["2026-10-23.jsonl", "2026-10-24.jsonl"]
     assert (new / "2026-10-24.jsonl").read_text(encoding="utf-8") == '{"heard": "b"}\n'
@@ -143,7 +143,7 @@ def test_migrate_never_overwrites_a_log_already_in_the_new_dir(tmp_path):
     legacy.mkdir()
     (legacy / "2026-10-24.jsonl").write_text("old\n", encoding="utf-8")
     (legacy / "notes.txt").write_text("keep me\n", encoding="utf-8")
-    new = tmp_path / "zundamon-jarvis"
+    new = tmp_path / "lalein"
     new.mkdir()
     (new / "2026-10-24.jsonl").write_text("new\n", encoding="utf-8")
     assert migrate_legacy_logs(new, legacy) == []
@@ -152,7 +152,7 @@ def test_migrate_never_overwrites_a_log_already_in_the_new_dir(tmp_path):
 
 
 def test_migrate_without_a_legacy_dir_is_a_noop(tmp_path):
-    new = tmp_path / "zundamon-jarvis"
+    new = tmp_path / "lalein"
     assert migrate_legacy_logs(new, tmp_path / "missing") == []
     assert not new.exists()
 

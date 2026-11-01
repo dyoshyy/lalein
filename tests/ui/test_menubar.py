@@ -1,6 +1,6 @@
-from zundamon_jarvis import cli
-from zundamon_jarvis.core import i18n
-from zundamon_jarvis.ui import menubar
+from lalein import cli
+from lalein.core import i18n
+from lalein.ui import menubar
 
 
 def labels(model):
@@ -83,7 +83,7 @@ def test_both_notes_are_kept():
 
 def test_cli_dispatches_menubar(monkeypatch):
     seen = []
-    monkeypatch.setattr("zundamon_jarvis.ui.menubar.run_menubar", lambda: seen.append(1) or 0)
+    monkeypatch.setattr("lalein.ui.menubar.run_menubar", lambda: seen.append(1) or 0)
     assert cli.main(["menubar"]) == 0
     assert seen == [1]
 

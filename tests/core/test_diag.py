@@ -1,6 +1,6 @@
 import logging
 
-from zundamon_jarvis.core.diag import RateLimitedLog, Window
+from lalein.core.diag import RateLimitedLog, Window
 
 
 class Clock:

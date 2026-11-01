@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from zundamon_jarvis.core.config import load_config
+from lalein.core.config import load_config
 
 
 def test_mic_device_defaults_to_the_os_default_input(tmp_path):
@@ -35,7 +35,7 @@ def test_model_can_be_overridden_or_inherited(tmp_path):
 # ---- speed ----
 
 def test_speed_defaults_to_1_2(tmp_path):
-    from zundamon_jarvis.core.config import DEFAULT_SPEED
+    from lalein.core.config import DEFAULT_SPEED
 
     assert DEFAULT_SPEED == 1.2
     assert load_config(tmp_path / "missing.toml").speed == 1.2
@@ -58,9 +58,9 @@ def test_speed_is_read_and_out_of_range_falls_back(tmp_path):
 # ---- write-back ----
 
 def test_update_creates_the_file(tmp_path):
-    from zundamon_jarvis.core.config import update_config
+    from lalein.core.config import update_config
 
-    p = tmp_path / "zundamon-jarvis" / "config.toml"
+    p = tmp_path / "lalein" / "config.toml"
     update_config({"speed": 1.3, "speaker_id": 2, "model": "opus"}, p)
     cfg = load_config(p)
     assert (cfg.speed, cfg.speaker_id, cfg.model) == (1.3, 2, "opus")
@@ -69,11 +69,11 @@ def test_update_creates_the_file(tmp_path):
 def test_update_keeps_other_and_unknown_keys_comments_and_tables(tmp_path):
     import tomllib
 
-    from zundamon_jarvis.core.config import update_config
+    from lalein.core.config import update_config
 
     p = tmp_path / "c.toml"
     original = (
-        "# my zundamon-jarvis\n"
+        "# my lalein\n"
         'mic_device = "zundamon_jarvis_aec_source"  # AEC on\n'
         "speed = 1.0\n"
         "future_knob = [1, 2]\n"
@@ -89,13 +89,13 @@ def test_update_keeps_other_and_unknown_keys_comments_and_tables(tmp_path):
     assert data["mic_device"] == "zundamon_jarvis_aec_source"
     assert data["future_knob"] == [1, 2]
     assert data["extra"] == {"speed": 5}  # a table's key of the same name is not touched
-    assert text.startswith("# my zundamon-jarvis\n")
+    assert text.startswith("# my lalein\n")
     assert "# AEC on" in text
     assert text.count("speed =") == 2  # replaced in place, not appended
 
 
 def test_update_writes_readable_values(tmp_path):
-    from zundamon_jarvis.core.config import update_config
+    from lalein.core.config import update_config
 
     p = tmp_path / "c.toml"
     update_config({"model": 'he said "hi"', "speed": 1.2}, p)
@@ -104,7 +104,7 @@ def test_update_writes_readable_values(tmp_path):
 
 
 def test_update_with_none_removes_the_key(tmp_path):
-    from zundamon_jarvis.core.config import update_config
+    from lalein.core.config import update_config
 
     p = tmp_path / "c.toml"
     p.write_text("speaker_id = 3\nmic_device = \"x\"\n", encoding="utf-8")
@@ -116,7 +116,7 @@ def test_update_with_none_removes_the_key(tmp_path):
 def test_update_refuses_a_broken_file_and_leaves_it(tmp_path):
     import pytest
 
-    from zundamon_jarvis.core.config import update_config
+    from lalein.core.config import update_config
 
     p = tmp_path / "c.toml"
     p.write_text("this is = = not toml\n", encoding="utf-8")
@@ -141,18 +141,18 @@ def test_mic_device_blank_or_invalid_falls_back_to_default(tmp_path):
 # ---- migration from the pre-rename path ----
 
 def test_migrate_copies_the_legacy_config_when_the_new_one_is_missing(tmp_path):
-    from zundamon_jarvis.core.config import migrate_legacy_config
+    from lalein.core.config import migrate_legacy_config
 
     legacy = tmp_path / "jarvis" / "config.toml"
     legacy.parent.mkdir()
     legacy.write_text("speed = 1.4\n", encoding="utf-8")
-    new = tmp_path / "zundamon-jarvis" / "config.toml"
+    new = tmp_path / "lalein" / "config.toml"
     assert migrate_legacy_config(new, legacy) is True
     assert new.read_text(encoding="utf-8") == "speed = 1.4\n" and legacy.exists()
 
 
 def test_migrate_never_overwrites_an_existing_config(tmp_path):
-    from zundamon_jarvis.core.config import migrate_legacy_config
+    from lalein.core.config import migrate_legacy_config
 
     legacy = tmp_path / "old.toml"
     legacy.write_text("speed = 1.4\n", encoding="utf-8")
@@ -163,20 +163,20 @@ def test_migrate_never_overwrites_an_existing_config(tmp_path):
 
 
 def test_migrate_does_nothing_without_a_legacy_file(tmp_path):
-    from zundamon_jarvis.core.config import migrate_legacy_config
+    from lalein.core.config import migrate_legacy_config
 
-    new = tmp_path / "zundamon-jarvis" / "config.toml"
+    new = tmp_path / "lalein" / "config.toml"
     assert migrate_legacy_config(new, tmp_path / "missing.toml") is False
     assert not new.exists()
 
 
 def test_load_config_falls_back_to_the_legacy_file_at_the_default_path(tmp_path, monkeypatch):
-    from zundamon_jarvis.core import config
+    from lalein.core import config
 
     legacy = tmp_path / "jarvis" / "config.toml"
     legacy.parent.mkdir()
     legacy.write_text("speed = 1.4\n", encoding="utf-8")
-    new = tmp_path / "zundamon-jarvis" / "config.toml"
+    new = tmp_path / "lalein" / "config.toml"
     monkeypatch.setattr(config, "CONFIG_PATH", new)
     monkeypatch.setattr(config, "LEGACY_CONFIG_PATH", legacy)
     assert config.load_config(new).speed == 1.4

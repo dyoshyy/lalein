@@ -1,6 +1,6 @@
 import numpy as np
 
-from zundamon_jarvis.voice.endpoint import Endpointer, SpeechStarted, Utterance
+from lalein.voice.endpoint import Endpointer, SpeechStarted, Utterance
 
 
 def feed_seq(ep, probs):
@@ -46,7 +46,7 @@ def test_reset_clears_state():
 
 
 def test_silero_vad_silence_is_low():
-    from zundamon_jarvis.voice.vad import SileroVad
+    from lalein.voice.vad import SileroVad
 
     p = SileroVad().prob(np.zeros(512, np.float32))
     assert isinstance(p, float) and 0.0 <= p < 0.5

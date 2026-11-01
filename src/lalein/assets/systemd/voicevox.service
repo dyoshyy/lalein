@@ -1,0 +1,9 @@
+[Unit]
+Description=VOICEVOX engine (Lalein TTS)
+
+[Service]
+ExecStart=%h/.local/share/lalein/voicevox_engine/run --host 127.0.0.1 --port 50021 --use_gpu
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

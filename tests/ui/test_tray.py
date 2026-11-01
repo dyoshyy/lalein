@@ -3,8 +3,8 @@ import types
 
 import pytest
 
-from zundamon_jarvis.core import i18n
-from zundamon_jarvis.ui import menubar, tray
+from lalein.core import i18n
+from lalein.ui import menubar, tray
 
 
 class MenuItem:
@@ -64,12 +64,12 @@ def test_badge_per_state_and_none_when_down():
 
 
 def test_tooltip():
-    assert tray.tooltip(None, "en") == "ZundamonJarvis: not running"
-    assert tray.tooltip({"state": "listening", "text": "Listening"}, "en") == "ZundamonJarvis: Listening"
+    assert tray.tooltip(None, "en") == "Lalein: not running"
+    assert tray.tooltip({"state": "listening", "text": "Listening"}, "en") == "Lalein: Listening"
     assert len(tray.tooltip({"state": "x", "text": "y" * 500})) == 127
-    assert tray.tooltip(None, "ja") == "ZundamonJarvis: 停止中"
+    assert tray.tooltip(None, "ja") == "Lalein: 停止中"
     assert tray.tooltip({"state": "offline", "text": "Offline (mic)", "reasons": ["mic"]}) == \
-        "ZundamonJarvis: オフライン（マイク）"
+        "Lalein: オフライン（マイク）"
 
 
 def test_notes_are_wrapped_for_a_narrow_menu():
@@ -115,7 +115,7 @@ def test_tray_app_updates_only_what_changed_and_notifies_once():
     app = tray.TrayApp(fake_pystray, icon, lambda a: None, image=lambda s: images.append(s) or f"img:{s}")
     app.show(None)
     app.show(None)
-    assert images == [None] and icon.menu_sets == 1 and icon.title == "ZundamonJarvis: 停止中"
+    assert images == [None] and icon.menu_sets == 1 and icon.title == "Lalein: 停止中"
     app.show({"state": "listening", "text": "Listening"})
     assert icon.icon == "img:listening" and icon.menu_sets == 2
     off = {"state": "offline", "text": "Offline (mic)"}
@@ -130,10 +130,10 @@ def test_tray_app_redraws_in_a_new_language(monkeypatch):
     app = tray.TrayApp(fake_pystray, icon, lambda a: None, image=lambda s: s)
     status = {"state": "listening", "text": "Listening"}
     app.show(status)
-    assert icon.title == "ZundamonJarvis: 聞き取り中" and icon.menu.items[1].text == "一時停止"
+    assert icon.title == "Lalein: 聞き取り中" and icon.menu.items[1].text == "一時停止"
     monkeypatch.setattr(i18n, "language", lambda config_path=None: "en")  # changed in the settings
     app.show(status)
-    assert icon.title == "ZundamonJarvis: Listening" and icon.menu.items[1].text == "Pause"
+    assert icon.title == "Lalein: Listening" and icon.menu.items[1].text == "Pause"
     assert icon.menu_sets == 2
 
 

@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-from zundamon_jarvis.ui.overlay import Overlay
+from lalein.ui.overlay import Overlay
 
 
 def preview(tmp_path, state="speaking", avatar="robo"):
@@ -14,7 +14,7 @@ def preview(tmp_path, state="speaking", avatar="robo"):
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Win32 windows")
 def test_windows_overlay_opens_draws_and_moves(tmp_path):
-    from zundamon_jarvis.ui import character_win
+    from lalein.ui import character_win
 
     overlay = preview(tmp_path)
     windows = character_win.CharacterWindows(character_win._win32(), overlay)
@@ -38,7 +38,7 @@ def test_macos_overlay_opens_draws_and_builds_its_menu(tmp_path):
     import AppKit
     import Foundation
 
-    from zundamon_jarvis.ui import character_mac
+    from lalein.ui import character_mac
 
     AppKit.NSApplication.sharedApplication()
     overlay = preview(tmp_path, avatar="cat")

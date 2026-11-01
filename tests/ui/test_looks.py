@@ -1,7 +1,7 @@
 import pytest
 
-from zundamon_jarvis.ui import looks
-from zundamon_jarvis.ui.character import AVATARS, STATES, Line, pose_for
+from lalein.ui import looks
+from lalein.ui.character import AVATARS, STATES, Line, pose_for
 
 
 class RecordingCanvas:

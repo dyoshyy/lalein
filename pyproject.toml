@@ -1,6 +1,9 @@
 [project]
+# The distribution keeps its old name for one release (0.5): installs from before the rename
+# update with `uv tool install "zundamon-jarvis @ <tag zip>"`, which needs this name to match.
+# 0.5's updater knows the next one is called lalein (lalein.system.update.dist_for).
 name = "zundamon-jarvis"
-version = "0.4.0"
+version = "0.5.0"
 description = "A voice assistant that talks to Claude Code, voiced by VOICEVOX Zundamon (macOS, Windows, Linux)"
 readme = "README.md"
 authors = [
@@ -16,7 +19,7 @@ dependencies = [
     "nvidia-cublas-cu12>=12.9.2.10; sys_platform == 'linux' or sys_platform == 'win32'",
     "nvidia-cudnn-cu12>=9.27.0.42; sys_platform == 'linux'",
     # Windows: the version of the cudnn64_9.dll that CTranslate2's Windows wheels bundle (it
-    # loads these sub-libraries and rejects another version; see zundamon_jarvis.voice.stt)
+    # loads these sub-libraries and rejects another version; see lalein.voice.stt)
     "nvidia-cudnn-cu12==9.10.2.21; sys_platform == 'win32'",
     "onnxruntime>=1.31.0",
     "pillow>=12.0.0; sys_platform == 'win32'",
@@ -31,16 +34,23 @@ dependencies = [
 ]
 
 [project.scripts]
-zundamon-jarvis = "zundamon_jarvis.cli:main"
-zundamon-jarvisctl = "zundamon_jarvis.ui.ctl:main"
+lalein = "lalein.cli:main"
+laleinctl = "lalein.ui.ctl:main"
+# the names from before the rename, for key bindings, scripts and the old service definitions
+zundamon-jarvis = "lalein.cli:main"
+zundamon-jarvisctl = "lalein.ui.ctl:main"
 
-# Windows: uv makes a no-console zundamon-jarvisw.exe from this; the Run key starts the supervisor with it
+# Windows: uv makes a no-console laleinw.exe from this; the Run key starts the supervisor with it
 [project.gui-scripts]
-zundamon-jarvisw = "zundamon_jarvis.cli:main"
+laleinw = "lalein.cli:main"
+zundamon-jarvisw = "lalein.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.8,<0.12.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "lalein"  # while the distribution is still called zundamon-jarvis
 
 [dependency-groups]
 dev = [

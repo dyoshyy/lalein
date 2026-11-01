@@ -3,9 +3,9 @@ import subprocess
 
 import pytest
 
-from zundamon_jarvis.ui import desktop
+from lalein.ui import desktop
 
-CMD = ["/x/zundamon-jarvisctl", "watch"]
+CMD = ["/x/laleinctl", "watch"]
 
 
 class Fake:
@@ -39,19 +39,19 @@ def test_hyprland_path_unchanged_opens(hypr_env):
     f = Fake([{"class": "foot", "address": "0x1"}])
     desktop.toggle_window("watch", CMD, system="linux", run=f.run, spawn=f.spawn)
     (argv, kw), = f.spawned
-    assert argv == ["/usr/bin/omarchy-launch-tui", "--app-id=zundamon-jarvis-watch", *CMD]
+    assert argv == ["/usr/bin/omarchy-launch-tui", "--app-id=lalein-watch", *CMD]
     assert f.runs == [["hyprctl", "clients", "-j"]]
 
 
 def test_hyprland_path_unchanged_closes(hypr_env):
-    f = Fake([{"class": "zundamon-jarvis-settings", "address": "0xabc"}])
+    f = Fake([{"class": "lalein-settings", "address": "0xabc"}])
     desktop.toggle_window("settings", ["x", "settings"], system="linux", run=f.run, spawn=f.spawn)
     assert f.runs[1] == ["hyprctl", "dispatch", 'hl.dsp.window.close({ window = "address:0xabc" })']
     assert f.spawned == []
 
 
 def test_hyprland_close_falls_back_to_classic_dispatcher(hypr_env):
-    f = Fake([{"class": "zundamon-jarvis-watch", "address": "0xabc"}], {"dispatch": "error"})
+    f = Fake([{"class": "lalein-watch", "address": "0xabc"}], {"dispatch": "error"})
     desktop.toggle_window("watch", CMD, system="linux", run=f.run, spawn=f.spawn)
     assert f.runs[-1] == ["hyprctl", "dispatch", "closewindow", "address:0xabc"]
 
@@ -61,18 +61,18 @@ def test_hyprland_without_omarchy_launcher_uses_xdg_terminal_exec(monkeypatch):
     monkeypatch.setattr(desktop.shutil, "which", lambda n: "/usr/bin/hyprctl" if n == "hyprctl" else None)
     f = Fake([])
     desktop.toggle_window("watch", CMD, system="linux", run=f.run, spawn=f.spawn)
-    assert f.spawned[0][0] == ["xdg-terminal-exec", "--app-id=zundamon-jarvis-watch", "-e", *CMD]
+    assert f.spawned[0][0] == ["xdg-terminal-exec", "--app-id=lalein-watch", "-e", *CMD]
 
 
 def test_mac_opens_terminal_with_title(monkeypatch):
     monkeypatch.setattr(desktop.shutil, "which", lambda n: None)
     f = Fake(replies={'"iTerm" is running': "false", '"Terminal" is running': "true", "count": "0"})
-    desktop.toggle_window("watch", ["/Users/a b/zundamon-jarvisctl", "watch"], system="mac", run=f.run, spawn=f.spawn)
+    desktop.toggle_window("watch", ["/Users/a b/laleinctl", "watch"], system="mac", run=f.run, spawn=f.spawn)
     script = f.runs[-1][-1]
     assert f.runs[-1][:2] == ["osascript", "-e"]
     assert 'tell application "Terminal"' in script and "do script" in script
-    assert "ZundamonJarvis — watch" in script
-    assert "'/Users/a b/zundamon-jarvisctl' watch" in script
+    assert "Lalein — watch" in script
+    assert "'/Users/a b/laleinctl' watch" in script
     assert f.spawned == []
 
 
@@ -84,16 +84,16 @@ def test_mac_uses_iterm_when_running():
     f = Fake(replies={'"iTerm" is running': "true", "count": "0"})
     desktop.toggle_window("settings", ["/x/ctl", "settings"], system="mac", run=f.run)
     script = f.runs[-1][-1]
-    assert 'tell application "iTerm"' in script and "ZundamonJarvis — settings" in script
+    assert 'tell application "iTerm"' in script and "Lalein — settings" in script
 
 
 def test_mac_closes_when_window_exists():
     f = Fake(replies={'"iTerm" is running': "false", '"Terminal" is running': "true", "count": "1"})
     desktop.toggle_window("watch", CMD, system="mac", run=f.run)
     script = f.runs[-1][-1]
-    assert "close" in script and "do script" not in script and "ZundamonJarvis — watch" in script
+    assert "close" in script and "do script" not in script and "Lalein — watch" in script
     assert script.endswith("saving no")
-    assert f.runs.index(["pkill", "-f", r"/x/zundamon\-jarvisctl\ watch"]) < f.runs.index(f.runs[-1])
+    assert f.runs.index(["pkill", "-f", r"/x/laleinctl\ watch"]) < f.runs.index(f.runs[-1])
 
 
 def test_mac_open_does_not_activate_before_do_script():
@@ -156,13 +156,13 @@ def test_windows_opens_a_titled_windows_terminal_window(monkeypatch):
     monkeypatch.setattr(desktop.shutil, "which", lambda n: r"C:\Users\a\AppData\Local\Microsoft\WindowsApps\wt.exe" if n == "wt" else None)
     f = Fake()
     looked = []
-    desktop.toggle_window("watch", [r"C:\zj\zundamon-jarvisctl.exe", "watch"], system="windows", run=f.run,
+    desktop.toggle_window("watch", [r"C:\zj\laleinctl.exe", "watch"], system="windows", run=f.run,
                           spawn=f.spawn, find_window=lambda t: looked.append(t) or 0, close_window=pytest.fail)
     (argv, kw), = f.spawned
     assert argv == [r"C:\Users\a\AppData\Local\Microsoft\WindowsApps\wt.exe", "-w", "new", "new-tab",
-                    "--title", "ZundamonJarvis — watch", "--suppressApplicationTitle",
-                    r"C:\zj\zundamon-jarvisctl.exe", "watch"]
-    assert kw == {} and looked == ["ZundamonJarvis — watch"] and f.runs == []
+                    "--title", "Lalein — watch", "--suppressApplicationTitle",
+                    r"C:\zj\laleinctl.exe", "watch"]
+    assert kw == {} and looked == ["Lalein — watch"] and f.runs == []
 
 
 def test_windows_without_windows_terminal_uses_a_new_console(monkeypatch):
@@ -178,7 +178,7 @@ def test_windows_closes_an_open_window_by_its_title(monkeypatch):
     f = Fake()
     closed = []
     desktop.toggle_window("settings", ["ctl.exe", "settings"], system="windows", spawn=f.spawn,
-                          find_window=lambda t: 0x1234 if t == "ZundamonJarvis — settings" else 0,
+                          find_window=lambda t: 0x1234 if t == "Lalein — settings" else 0,
                           close_window=closed.append)
     assert closed == [0x1234] and f.spawned == []
 

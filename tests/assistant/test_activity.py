@@ -1,5 +1,5 @@
-from zundamon_jarvis.assistant.activity import ActivityFeed
-from zundamon_jarvis.assistant.brain import TaskDone, TextDelta, ToolUse, TurnEnd
+from lalein.assistant.activity import ActivityFeed
+from lalein.assistant.brain import TaskDone, TextDelta, ToolUse, TurnEnd
 
 
 class Sink(list):
@@ -97,7 +97,7 @@ def test_thinking_is_published_as_on_off_pairs():
 
 
 def test_auth_problem_is_ignored_by_the_feed():
-    from zundamon_jarvis.assistant.brain import AuthProblem
+    from lalein.assistant.brain import AuthProblem
     f, sink = feed()
     f.brain_event(AuthProblem())
     assert sink == []

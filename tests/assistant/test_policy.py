@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from zundamon_jarvis.assistant.policy import describe_action, needs_confirmation, parse_confirmation
+from lalein.assistant.policy import describe_action, needs_confirmation, parse_confirmation
 
 R = Path("/home/alice/notes")
 
@@ -250,7 +250,7 @@ def test_monitor(inp, exp):
     ("Write", {"file_path": "/home/alice/.bashrc"}),
     ("Edit", {"file_path": "/home/alice/.claude/settings.json"}),
     ("Write", {"file_path": str(R / "notes/memo.md")}),
-    ("Write", {"file_path": str(R / "../zundamon-jarvis/x.py")}),
+    ("Write", {"file_path": str(R / "../lalein/x.py")}),
     ("Edit", {"file_path": str(R / ".git/config")}),
     ("Write", {"file_path": str(R / ".claude/settings.json")}),
     ("Write", {"file_path": str(R / ".mcp.json")}),

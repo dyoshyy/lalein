@@ -24,7 +24,7 @@ from claude_agent_sdk.types import (
     ToolPermissionContext,
 )
 
-from zundamon_jarvis.assistant.brain import (
+from lalein.assistant.brain import (
     AuthProblem,
     ClaudeBrain,
     PermissionRequest,
@@ -358,7 +358,7 @@ async def test_odd_input_asks_instead_of_running(brain, tool, inp, monkeypatch):
     def boom(*_a, **_k):
         raise ValueError("odd input")
 
-    monkeypatch.setattr("zundamon_jarvis.assistant.brain.needs_confirmation", boom)  # the check itself raises
+    monkeypatch.setattr("lalein.assistant.brain.needs_confirmation", boom)  # the check itself raises
     it = brain.events()
     await brain.submit("x")
     cb = FakeClient.instances[0].options.can_use_tool
@@ -430,7 +430,7 @@ async def test_reader_crash_ends_turn_and_reconnects_next_time(brain):
 
 
 def test_voice_mode_prompt_exists():
-    from zundamon_jarvis.assistant import brain
+    from lalein.assistant import brain
 
     # package data: resolves inside the installed package, not the checkout root
     assert brain.VOICE_PROMPT.parent.parent == Path(brain.__file__).parent.parent
@@ -504,7 +504,7 @@ def test_error_result_turn_end_is_not_ok():
 
 
 def test_auth_text_matches_exceptions():
-    from zundamon_jarvis.assistant.brain import is_auth_error
+    from lalein.assistant.brain import is_auth_error
     assert is_auth_error(Exception("Invalid API key"))
     assert not is_auth_error(Exception("connection reset"))
 
@@ -513,7 +513,7 @@ def test_failed_turn_log_has_no_result_text(caplog):
     import logging
 
     brain = ClaudeBrain(Path("/w"), client_factory=FakeClient)
-    with caplog.at_level(logging.WARNING, logger="zundamon_jarvis.assistant.brain"):
+    with caplog.at_level(logging.WARNING, logger="lalein.assistant.brain"):
         brain._handle(result(subtype="error_during_execution", is_error=True, result="秘密の返事です"))
     msgs = " | ".join(r.getMessage() for r in caplog.records)
     assert "Claude turn failed" in msgs and "error_during_execution" in msgs

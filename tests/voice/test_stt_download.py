@@ -2,7 +2,7 @@
 
 import pytest
 
-from zundamon_jarvis.voice import stt
+from lalein.voice import stt
 
 
 @pytest.fixture

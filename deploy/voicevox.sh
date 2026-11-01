@@ -4,7 +4,7 @@
 set -euo pipefail
 
 FLAVOR="${1:-nvidia}"
-DEST="$HOME/.local/share/zundamon-jarvis/voicevox_engine"
+DEST="$HOME/.local/share/lalein/voicevox_engine"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 UNIT_DIR="$HOME/.config/systemd/user"
 
@@ -25,12 +25,12 @@ if [ ! -e "$DEST" ] && [ ! -L "$LEGACY" ] && [ -x "$LEGACY/voicevox_engine/run" 
   MOVED=1
 fi
 
-# Pinned, checksummed download + extraction lives in the Python CLI (src/zundamon_jarvis/system/engine.py).
+# Pinned, checksummed download + extraction lives in the Python CLI (src/lalein/system/engine.py).
 # Only needed when there is no engine yet.
 if [ ! -x "$DEST/run" ]; then
-  ZJ="$HERE/../.venv/bin/zundamon-jarvis"
-  [ -x "$ZJ" ] || ZJ="$(command -v zundamon-jarvis || true)"
-  [ -n "$ZJ" ] || { echo "zundamon-jarvis not installed (uv sync)" >&2; exit 1; }
+  ZJ="$HERE/../.venv/bin/lalein"
+  [ -x "$ZJ" ] || ZJ="$(command -v lalein || true)"
+  [ -n "$ZJ" ] || { echo "lalein not installed (uv sync)" >&2; exit 1; }
   if [ "$FLAVOR" = cpu ]; then "$ZJ" engine install --cpu; else "$ZJ" engine install; fi
 fi
 

@@ -1,5 +1,5 @@
-from zundamon_jarvis.ui.character import Prefs, load_prefs, save_prefs, update_prefs
-from zundamon_jarvis.ui.overlay import Overlay
+from lalein.ui.character import Prefs, load_prefs, save_prefs, update_prefs
+from lalein.ui.overlay import Overlay
 
 
 def make(tmp_path, **kw):

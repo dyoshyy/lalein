@@ -1,17 +1,17 @@
-# zundamon-jarvis one-line installer (Windows 10 / 11, x64)
-#   powershell -NoProfile -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/dyoshyy/zundamon-jarvis/main/install.ps1 | iex"
+# lalein one-line installer (Windows 10 / 11, x64)
+#   powershell -NoProfile -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/dyoshyy/lalein/main/install.ps1 | iex"
 # 環境変数: ZJ_VERSION=v0.1.0 (版を固定) / ZJ_DRY_RUN=1 (実行せず表示だけ)
 #           ZJ_LANG=ja|en (表示の言語。既定は Windows の表示言語: 日本語なら日本語、ほかは英語)
-#   例: $env:ZJ_DRY_RUN = '1'; irm https://raw.githubusercontent.com/dyoshyy/zundamon-jarvis/main/install.ps1 | iex
+#   例: $env:ZJ_DRY_RUN = '1'; irm https://raw.githubusercontent.com/dyoshyy/lalein/main/install.ps1 | iex
 #
 # 全体を関数に包み、最後の行で呼ぶ。irm | iex が途中で切れても、半端なスクリプトは走らない。
 # iex の中では exit を使わない（ユーザーの PowerShell ごと閉じてしまう）。失敗は throw で外の catch へ。
-# 音声エンジンと文字起こしモデルは、最後に開く設定画面（zundamon-jarvis setup）が取得する。
+# 音声エンジンと文字起こしモデルは、最後に開く設定画面（lalein setup）が取得する。
 # Windows PowerShell 5.1 で動くように書く（?? や && などの PowerShell 7 の構文は使わない）。
 
-function Install-ZundamonJarvis {
+function Install-Lalein {
     $ErrorActionPreference = 'Stop'
-    $OwnerRepo = 'dyoshyy/zundamon-jarvis'
+    $OwnerRepo = 'dyoshyy/lalein'
     $Version = $env:ZJ_VERSION
     $DryRun = ($env:ZJ_DRY_RUN -eq '1')
     $MinFreeBytes = 8GB
@@ -130,21 +130,24 @@ function Install-ZundamonJarvis {
         $env:Path = "$uvBin;$env:Path"
 
         # ⑤ 本体（git が要らないように、タグの zip から入れる）
-        Step (T 'zundamon-jarvis を入れます' 'Installing zundamon-jarvis')
+        Step (T 'lalein を入れます' 'Installing lalein')
         $want = $Version -replace '^v', ''
         $have = ''
-        if (-not $DryRun -and (Test-Command 'zundamon-jarvis')) {
-            try { $have = ([string](& zundamon-jarvis --version | Select-Object -Last 1)).Trim() } catch { $have = '' }
+        if (-not $DryRun -and (Test-Command 'lalein')) {
+            try { $have = ([string](& lalein --version | Select-Object -Last 1)).Trim() } catch { $have = '' }
         }
         if ($have -and $have -eq $want) {
             Say ('    ' + (T "すでに $have が入っています。飛ばします" "$have is already installed. Skipping"))
         } else {
             if ($have) { Say ('    ' + (T "$have から $Version に入れ直します" "Replacing $have with $Version")) }
+            # 0.5 までの版は zundamon-jarvis という名前で配っている（lalein.system.update.dist_for と同じ）
+            $dist = 'lalein'
+            if ($want -match '^(\d+)\.(\d+)' -and ([int]$Matches[1] -eq 0) -and ([int]$Matches[2] -lt 6)) { $dist = 'zundamon-jarvis' }
             Invoke-Zj 'uv' @('tool', 'install', '--force', '--python', '3.12',
-                             "zundamon-jarvis @ https://github.com/$OwnerRepo/archive/refs/tags/$Version.zip")
+                             "$dist @ https://github.com/$OwnerRepo/archive/refs/tags/$Version.zip")
         }
         if (-not $DryRun) {
-            if (-not (Test-Command 'zundamon-jarvis')) { Fail-Step }
+            if (-not (Test-Command 'lalein')) { Fail-Step }
             $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
             if (-not (($userPath -split ';') -contains $uvBin)) {
                 Say ('    ' + (T "注意: $uvBin が PATH に入っていません。" "Note: $uvBin is not on your PATH."))
@@ -155,7 +158,7 @@ function Install-ZundamonJarvis {
 
         # ⑥ 設定（ブラウザで開く。音声エンジンとモデルの取得、常駐の設定もここで済む）
         Step (T '設定を始めます（ブラウザが開きます）' 'Starting setup (a window opens)')
-        Invoke-Zj 'zundamon-jarvis' @('setup')
+        Invoke-Zj 'lalein' @('setup')
 
         Say ('==> ' + (T '完了しました' 'Done'))
     } catch {
@@ -173,4 +176,4 @@ function Install-ZundamonJarvis {
     }
 }
 
-Install-ZundamonJarvis
+Install-Lalein

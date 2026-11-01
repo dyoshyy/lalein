@@ -13,22 +13,22 @@ def set_home(monkeypatch, path):
     monkeypatch.setenv("HOME", str(path))
     monkeypatch.setenv("USERPROFILE", str(path))  # Path.home() on Windows
 
-from zundamon_jarvis.core.platform import config_dir, data_dir, log_dir, runtime_dir, socket_path, system
+from lalein.core.platform import config_dir, data_dir, log_dir, runtime_dir, socket_path, system
 
 
 def test_linux_paths_unchanged(monkeypatch, tmp_path):
     set_home(monkeypatch, tmp_path)
     monkeypatch.delenv("XDG_STATE_HOME", raising=False)
     monkeypatch.setenv("XDG_RUNTIME_DIR", "/run/user/1000")
-    assert config_dir("linux") == tmp_path / ".config/zundamon-jarvis"
-    assert log_dir("linux") == tmp_path / ".local/state/zundamon-jarvis"
-    assert data_dir("linux") == tmp_path / ".local/share/zundamon-jarvis"
-    assert socket_path("linux") == Path("/run/user/1000/zundamon-jarvis.sock")
+    assert config_dir("linux") == tmp_path / ".config/lalein"
+    assert log_dir("linux") == tmp_path / ".local/state/lalein"
+    assert data_dir("linux") == tmp_path / ".local/share/lalein"
+    assert socket_path("linux") == Path("/run/user/1000/lalein.sock")
 
 
 def test_linux_honours_xdg_state_home(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    assert log_dir("linux") == tmp_path / "zundamon-jarvis"
+    assert log_dir("linux") == tmp_path / "lalein"
 
 
 @needs_uid
@@ -41,10 +41,10 @@ def test_linux_runtime_dir_falls_back_to_run_user(monkeypatch):
 def test_mac_paths(monkeypatch, tmp_path):
     set_home(monkeypatch, tmp_path)
     monkeypatch.setenv("TMPDIR", str(tmp_path / "t"))
-    sup = tmp_path / "Library/Application Support/zundamon-jarvis"
+    sup = tmp_path / "Library/Application Support/lalein"
     assert config_dir("mac") == sup
     assert data_dir("mac") == sup
-    assert log_dir("mac") == tmp_path / "Library/Logs/zundamon-jarvis"
+    assert log_dir("mac") == tmp_path / "Library/Logs/lalein"
 
 
 @needs_uid
@@ -52,8 +52,8 @@ def test_mac_socket_path(monkeypatch, tmp_path):
     monkeypatch.setenv("TMPDIR", str(tmp_path / "t"))
     sock = socket_path("mac")
     assert sock.parent.stat().st_mode & 0o777 == 0o700
-    assert sock.name == "zundamon-jarvis.sock"
-    assert sock.parent == tmp_path / "t" / f"zundamon-jarvis-{os.getuid()}"
+    assert sock.name == "lalein.sock"
+    assert sock.parent == tmp_path / "t" / f"lalein-{os.getuid()}"
 
 
 def test_system_from_sys_platform(monkeypatch):
@@ -66,7 +66,7 @@ def test_system_from_sys_platform(monkeypatch):
 @needs_uid
 def test_mac_without_tmpdir_uses_tmp_with_uid(monkeypatch, tmp_path):
     monkeypatch.delenv("TMPDIR", raising=False)
-    d = Path("/tmp") / f"zundamon-jarvis-{os.getuid()}"
+    d = Path("/tmp") / f"lalein-{os.getuid()}"
     if d.exists() and (d.is_symlink() or d.lstat().st_uid != os.getuid()):
         pytest.skip("unusable pre-existing dir")
     assert runtime_dir("mac") == d
@@ -76,7 +76,7 @@ def test_mac_without_tmpdir_uses_tmp_with_uid(monkeypatch, tmp_path):
 @needs_uid
 def test_mac_runtime_dir_tightens_wrong_permissions(monkeypatch, tmp_path):
     monkeypatch.setenv("TMPDIR", str(tmp_path))
-    d = tmp_path / f"zundamon-jarvis-{os.getuid()}"
+    d = tmp_path / f"lalein-{os.getuid()}"
     d.mkdir(mode=0o755)
     d.chmod(0o755)
     assert runtime_dir("mac") == d
@@ -88,7 +88,7 @@ def test_mac_runtime_dir_rejects_symlink(monkeypatch, tmp_path):
     monkeypatch.setenv("TMPDIR", str(tmp_path))
     target = tmp_path / "elsewhere"
     target.mkdir()
-    (tmp_path / f"zundamon-jarvis-{os.getuid()}").symlink_to(target)
+    (tmp_path / f"lalein-{os.getuid()}").symlink_to(target)
     with pytest.raises(RuntimeError, match="not a real directory"):
         runtime_dir("mac")
 
@@ -97,10 +97,10 @@ def test_mac_runtime_dir_rejects_symlink(monkeypatch, tmp_path):
 def test_mac_runtime_dir_rejects_foreign_owner(monkeypatch, tmp_path):
     monkeypatch.setenv("TMPDIR", str(tmp_path))
     uid = os.getuid()
-    (tmp_path / f"zundamon-jarvis-{uid}").mkdir(mode=0o700)
+    (tmp_path / f"lalein-{uid}").mkdir(mode=0o700)
     monkeypatch.setattr(os, "getuid", lambda: uid + 1)
     # the dir name now uses uid+1, so point at the existing one via a matching name
-    (tmp_path / f"zundamon-jarvis-{uid + 1}").mkdir(mode=0o700)
+    (tmp_path / f"lalein-{uid + 1}").mkdir(mode=0o700)
     with pytest.raises(RuntimeError, match="owned by uid"):
         runtime_dir("mac")
 
@@ -108,13 +108,33 @@ def test_mac_runtime_dir_rejects_foreign_owner(monkeypatch, tmp_path):
 def test_windows_paths(monkeypatch, tmp_path):
     monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
-    assert config_dir("windows") == tmp_path / "Roaming" / "zundamon-jarvis"
-    assert data_dir("windows") == tmp_path / "Local" / "zundamon-jarvis"
-    assert log_dir("windows") == tmp_path / "Local" / "zundamon-jarvis" / "logs"
-    assert socket_path("windows") == tmp_path / "Local" / "zundamon-jarvis" / "run" / "control.json"
-    assert (tmp_path / "Local" / "zundamon-jarvis" / "run").is_dir()
+    assert config_dir("windows") == tmp_path / "Roaming" / "lalein"
+    assert data_dir("windows") == tmp_path / "Local" / "lalein"
+    assert log_dir("windows") == tmp_path / "Local" / "lalein" / "logs"
+    assert socket_path("windows") == tmp_path / "Local" / "lalein" / "run" / "control.json"
+    assert (tmp_path / "Local" / "lalein" / "run").is_dir()
 
 
 def test_system_windows(monkeypatch):
     monkeypatch.setattr("sys.platform", "win32")
     assert system() == "windows"
+
+
+@pytest.mark.parametrize("sys_", ["linux", "mac", "windows"])
+def test_the_pre_rename_directories_are_used_until_they_are_moved(monkeypatch, tmp_path, sys_):
+    set_home(monkeypatch, tmp_path)
+    monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
+    new = {f: getattr(sys.modules["lalein.core.platform"], f)(sys_) for f in ("config_dir", "data_dir", "log_dir")}
+    assert all(p.name == "lalein" or p.parent.name == "lalein" for p in new.values())
+    for p in new.values():  # a zundamon-jarvis install: only the old directories exist
+        legacy = Path(str(p).replace("lalein", "zundamon-jarvis"))
+        legacy.mkdir(parents=True, exist_ok=True)
+    import lalein.core.platform as plat
+
+    for f, p in new.items():
+        assert getattr(plat, f)(sys_) == Path(str(p).replace("lalein", "zundamon-jarvis"))
+        assert getattr(plat, f)(sys_, legacy=False) == p  # where the migration moves it
+    new["config_dir"].mkdir(parents=True)  # once the new one exists, it wins
+    assert plat.config_dir(sys_) == new["config_dir"]

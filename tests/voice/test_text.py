@@ -1,6 +1,6 @@
 import pytest
 
-from zundamon_jarvis.voice.text import SentenceChunker, is_hallucination, is_silent, speakable
+from lalein.voice.text import SentenceChunker, is_hallucination, is_silent, speakable
 
 
 def test_chunker_splits_on_japanese_punctuation():

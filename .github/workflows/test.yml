@@ -23,8 +23,8 @@ jobs:
       - run: uv run --no-sync python -m pytest -v --tb=short -rfE
       - name: CLI entry points start
         run: |
-          uv run --no-sync zundamon-jarvis --version
-          uv run --no-sync zundamon-jarvisctl status; if ($LASTEXITCODE -eq 1) { exit 0 }
+          uv run --no-sync lalein --version
+          uv run --no-sync laleinctl status; if ($LASTEXITCODE -eq 1) { exit 0 }
 
   macos-character:
     runs-on: macos-14

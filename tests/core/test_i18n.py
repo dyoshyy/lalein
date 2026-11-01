@@ -1,5 +1,5 @@
-from zundamon_jarvis.core import i18n
-from zundamon_jarvis.core.config import load_config
+from lalein.core import i18n
+from lalein.core.config import load_config
 
 TABLE = {"hello": {"ja": "こんにちは {name}", "en": "Hello {name}"}, "only_ja": {"ja": "日本語だけ"}}
 
@@ -48,16 +48,16 @@ def _tables():
     import importlib
     import pkgutil
 
-    import zundamon_jarvis
+    import lalein
 
-    for info in pkgutil.walk_packages(zundamon_jarvis.__path__, "zundamon_jarvis."):
+    for info in pkgutil.walk_packages(lalein.__path__, "lalein."):
         try:
             module = importlib.import_module(info.name)
         except Exception:  # an OS-only module (GTK, rumps, ...)
             continue
         for name, value in vars(module).items():
             if name == "TEXT" or name.endswith("_TEXT_I18N"):
-                yield f"{info.name.removeprefix('zundamon_jarvis.')}.{name}", value
+                yield f"{info.name.removeprefix('lalein.')}.{name}", value
 
 
 def test_every_text_table_is_complete():

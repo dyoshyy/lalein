@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from zundamon_jarvis.system import doctor
+from lalein.system import doctor
 
 
 @pytest.fixture
@@ -40,7 +40,7 @@ def kw(home, **over):
 
 def test_redact_rules(home):
     text = "\n".join([
-        f"{home}/Library/Logs/zundamon-jarvis/daemon.log",
+        f"{home}/Library/Logs/lalein/daemon.log",
         "INFO user taro logged in as taro.yamada+jj@example.co.jp",
         json.dumps({"ts": "2026-10-24T10:00:00+09:00", "heard": "秘密の話",
                     "replied": "秘密の返事", "state": "listening"}, ensure_ascii=False),
@@ -56,7 +56,7 @@ def test_redact_rules(home):
 
 
 def test_doctor_redacts_home_user_email_and_conversation(home):
-    logs = home / "Library" / "Logs" / "zundamon-jarvis"
+    logs = home / "Library" / "Logs" / "lalein"
     logs.mkdir(parents=True)
     (logs / "daemon.log").write_text(
         "".join(f"INFO line {i}\n" for i in range(300))
@@ -64,7 +64,7 @@ def test_doctor_redacts_home_user_email_and_conversation(home):
     (logs / "2026-10-24.jsonl").write_text(json.dumps(
         {"ts": "2026-10-24T10:00:00+09:00", "heard": "銀行の暗証番号は", "replied": "言わないで",
          "state": "listening"}, ensure_ascii=False) + "\n", encoding="utf-8")
-    cfg = home / "Library" / "Application Support" / "zundamon-jarvis" / "config.toml"
+    cfg = home / "Library" / "Application Support" / "lalein" / "config.toml"
     cfg.parent.mkdir(parents=True)
     cfg.write_text(f'knowledge_dir = {json.dumps(f"{home}/notes")}\nmodel = "opus"\n', encoding="utf-8")
     lines: list[str] = []
@@ -83,7 +83,7 @@ def test_doctor_runs_without_daemon(home):
     lines: list[str] = []
     assert doctor.run_doctor(lines.append, **kw(home)) == 0
     out = "\n".join(lines)
-    assert "Python" in out and "zundamon-jarvis" in out
+    assert "Python" in out and "lalein" in out
     assert "動いていません" in out          # daemon status
     assert "つながりません" in out          # VOICEVOX
     assert "MacBook Proのマイク" in out
@@ -115,7 +115,7 @@ def test_doctor_linux_reads_journal(home):
     lines: list[str] = []
     assert doctor.run_doctor(lines.append, **kw(home, system="linux", run=run,
                                                 which=lambda n: f"/usr/bin/{n}")) == 0
-    assert ["journalctl", "--user", "-u", "zundamon-jarvis", "-n", "200", "--no-pager"] in seen
+    assert ["journalctl", "--user", "-u", "lalein", "-n", "200", "--no-pager"] in seen
     assert "journal line" in "\n".join(lines)
 
 
@@ -123,22 +123,22 @@ SECRET_URL = "%E7%A7%98%E5%AF%86%E3%81%AE%E8%A9%B1"  # 秘密の話, as VOICEVOX
 
 
 def test_doctor_hides_speech_in_voicevox_and_old_daemon_logs(home):
-    logs = home / "Library" / "Logs" / "zundamon-jarvis"
+    logs = home / "Library" / "Logs" / "lalein"
     logs.mkdir(parents=True)
     (logs / "voicevox.log").write_text(
         f'INFO:     127.0.0.1:50123 - "POST /audio_query?text={SECRET_URL}&speaker=3 HTTP/1.1" 200 OK\n'
         'INFO:     127.0.0.1:50124 - "POST /synthesis?speaker=3 HTTP/1.1" 200 OK\n', encoding="utf-8")
     (logs / "daemon.log").write_text("\n".join([
-        "ERROR zundamon_jarvis.assistant.orchestrator: speak failed: '秘密の返事です。'",
+        "ERROR lalein.assistant.orchestrator: speak failed: '秘密の返事です。'",
         "Traceback (most recent call last):",
         '  File "/x/orchestrator.py", line 726, in _speak_loop',
         "httpx.HTTPStatusError: Server error '500 Internal Server Error' for url "
         f"'http://127.0.0.1:50021/audio_query?text={SECRET_URL}&speaker=3'",
-        "ERROR zundamon_jarvis.assistant.orchestrator: failed to handle TextDelta(text='内緒の話')",
-        "INFO zundamon_jarvis.assistant.orchestrator: no answer to '「ジム」をカレンダーに入れるけど、いい？'; denying",
-        "WARNING zundamon_jarvis.assistant.brain: Claude turn failed: ResultMessage(subtype='error', result='返事の一部')",
-        "INFO zundamon_jarvis.assistant.orchestrator: utterance dropped (paused): '独り言'",
-        "WARNING zundamon_jarvis.assistant.orchestrator: speak failed (12 chars): HTTPStatusError",
+        "ERROR lalein.assistant.orchestrator: failed to handle TextDelta(text='内緒の話')",
+        "INFO lalein.assistant.orchestrator: no answer to '「ジム」をカレンダーに入れるけど、いい？'; denying",
+        "WARNING lalein.assistant.brain: Claude turn failed: ResultMessage(subtype='error', result='返事の一部')",
+        "INFO lalein.assistant.orchestrator: utterance dropped (paused): '独り言'",
+        "WARNING lalein.assistant.orchestrator: speak failed (12 chars): HTTPStatusError",
     ]) + "\n", encoding="utf-8")
     lines: list[str] = []
     assert doctor.run_doctor(lines.append, **kw(home)) == 0
@@ -153,10 +153,10 @@ def test_doctor_hides_speech_in_voicevox_and_old_daemon_logs(home):
 def test_doctor_hides_the_knowledge_dir(home):
     notes = home / "Documents" / "秘密プロジェクト"
     notes.mkdir(parents=True)
-    cfg = home / "Library" / "Application Support" / "zundamon-jarvis" / "config.toml"
+    cfg = home / "Library" / "Application Support" / "lalein" / "config.toml"
     cfg.parent.mkdir(parents=True)
     cfg.write_text('knowledge_dir = "~/Documents/秘密プロジェクト"\nspeed = 1.4\n', encoding="utf-8")
-    logs = home / "Library" / "Logs" / "zundamon-jarvis"
+    logs = home / "Library" / "Logs" / "lalein"
     logs.mkdir(parents=True)
     (logs / "daemon.log").write_text(f"WARNING config: knowledge_dir {notes} is not an existing directory\n", encoding="utf-8")
     lines: list[str] = []
@@ -187,19 +187,19 @@ def test_doctor_names_the_daemon_python_and_flags_digital_silence(home):
 def test_doctor_reads_the_daemon_python_from_the_launch_agent(home):
     import plistlib
 
-    exe = home / ".local" / "bin" / "zundamon-jarvis"
+    exe = home / ".local" / "bin" / "lalein"
     exe.parent.mkdir(parents=True)
-    py = home / ".local" / "share" / "uv" / "tools" / "zundamon-jarvis" / "bin" / "python3.12"
+    py = home / ".local" / "share" / "uv" / "tools" / "lalein" / "bin" / "python3.12"
     py.parent.mkdir(parents=True)
     py.write_text("", encoding="utf-8")
     exe.write_text(f"#!{py}\nimport sys\n", encoding="utf-8")
     agents = home / "Library" / "LaunchAgents"
     agents.mkdir(parents=True)
-    (agents / "dev.zundamon-jarvis.daemon.plist").write_bytes(
+    (agents / "dev.lalein.daemon.plist").write_bytes(
         plistlib.dumps({"ProgramArguments": [str(exe), "daemon"]}))
     lines: list[str] = []
     doctor.run_doctor(lines.append, **kw(home))
-    py_shown = str(Path("~/.local/share/uv/tools/zundamon-jarvis/bin/python3.12"))  # host separators
+    py_shown = str(Path("~/.local/share/uv/tools/lalein/bin/python3.12"))  # host separators
     assert f"デーモンの Python（起動設定から）: {py_shown}" in "\n".join(lines)
 
 
@@ -228,20 +228,20 @@ def test_doctor_on_windows_reads_files_registry_and_gpus(home, tmp_path):
             else "2.1.0 (Claude Code)\n"
         return subprocess.CompletedProcess(argv, 0, stdout=out, stderr="")
 
-    logs = tmp_path / "Local" / "zundamon-jarvis" / "logs"
+    logs = tmp_path / "Local" / "lalein" / "logs"
     logs.mkdir(parents=True)
-    (logs / "daemon.log").write_text("INFO zundamon_jarvis.assistant.daemon: running (listening)\n", encoding="utf-8")
+    (logs / "daemon.log").write_text("INFO lalein.assistant.daemon: running (listening)\n", encoding="utf-8")
     lines: list[str] = []
     assert doctor.run_doctor(lines.append, **kw(
         home, system="windows", run=run, log_dir=logs,
         which=lambda n: "C:/bin/claude.exe" if n == "claude" else None,
         cuda_devices=lambda: 0,
-        autostart=lambda: r'"C:\Users\taro\.local\bin\zundamon-jarvis.exe" supervise')) == 0
+        autostart=lambda: r'"C:\Users\taro\.local\bin\lalein.exe" supervise')) == 0
     out = "\n".join(lines)
     assert "Windows" in out and "GPU: NVIDIA GeForce RTX 4070, Intel(R) UHD Graphics 770" in out
     assert "CUDA デバイス: 0（音声認識は CPU（int8、遅め））" in out
     assert "running (listening)" in out  # the daemon log file, not the journal
-    assert r"Run\ZundamonJarvis): " in out and "zundamon-jarvis.exe" in out and "supervise" in out
+    assert r"Run\Lalein): " in out and "lalein.exe" in out and "supervise" in out
     assert "サービス:" not in out  # service_status (systemctl) is not asked
     assert set(seen) == {"powershell", "C:/bin/claude.exe"}
 
@@ -273,12 +273,12 @@ def test_doctor_on_windows_survives_missing_probes(home, tmp_path):
 
 def test_redact_windows_home_in_every_spelling():
     home = r"C:\Users\taro"
-    text = "\n".join([r"C:\Users\taro\AppData\Local\zundamon-jarvis\logs",
+    text = "\n".join([r"C:\Users\taro\AppData\Local\lalein\logs",
                       "C:/Users/taro/notes",
                       json.dumps({"path": r"C:\Users\taro\x"})])
     out = doctor.redact(text, home=home)
     assert "Users" not in out
-    assert out.splitlines() == [r"~\AppData\Local\zundamon-jarvis\logs", "~/notes", r'{"path": "~\\x"}']
+    assert out.splitlines() == [r"~\AppData\Local\lalein\logs", "~/notes", r'{"path": "~\\x"}']
 
 
 def test_windows_mic_silence_verdict_points_at_the_privacy_settings():

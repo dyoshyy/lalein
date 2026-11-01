@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 from helpers import resample_24k_to_16k
 
-from zundamon_jarvis.voice.stt import Transcriber
-from zundamon_jarvis.voice.text import is_hallucination
-from zundamon_jarvis.voice.tts import Voicevox
+from lalein.voice.stt import Transcriber
+from lalein.voice.text import is_hallucination
+from lalein.voice.tts import Voicevox
 
 pytestmark = pytest.mark.integration
 

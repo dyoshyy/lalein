@@ -4,7 +4,7 @@ import socket
 
 import pytest
 
-from zundamon_jarvis.core import control, transport
+from lalein.core import control, transport
 
 
 class Target:
@@ -27,7 +27,7 @@ class Target:
 
 def test_json_path_means_tcp(tmp_path):
     assert transport.is_tcp(tmp_path / "control.json")
-    assert not transport.is_tcp(tmp_path / "zundamon-jarvis.sock")
+    assert not transport.is_tcp(tmp_path / "lalein.sock")
 
 
 async def test_tcp_round_trip_writes_port_and_token(tmp_path):

@@ -7,7 +7,7 @@ import time
 import pytest
 
 from helpers import WINDOWS, endpoint, open_endpoint
-from zundamon_jarvis.core import control, transport
+from lalein.core import control, transport
 
 
 class Target:
@@ -60,10 +60,10 @@ async def test_unknown_command_is_an_error_and_does_nothing():
 def test_socket_path_is_in_the_runtime_dir(monkeypatch, tmp_path):
     if WINDOWS:
         monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-        assert control.socket_path() == tmp_path / "zundamon-jarvis" / "run" / "control.json"
+        assert control.socket_path() == tmp_path / "lalein" / "run" / "control.json"
     else:
         monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
-        assert control.socket_path() == tmp_path / "zundamon-jarvis.sock"
+        assert control.socket_path() == tmp_path / "lalein.sock"
 
 
 async def test_server_round_trip_over_the_socket(tmp_path):

@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from zundamon_jarvis import cli
-from zundamon_jarvis.core.config import LANGUAGES
-from zundamon_jarvis.system import update
+from lalein import cli
+from lalein.core.config import LANGUAGES
+from lalein.system import update
 
 POSIX_ONLY = pytest.mark.skipif(sys.platform == "win32", reason="runs the /bin/sh helper")
 
@@ -133,10 +133,10 @@ def test_a_broken_cache_is_no_answer(tmp_path, content):
 # ---- how it was installed ----
 
 def _checkout(root: Path) -> Path:
-    (root / "src" / "zundamon_jarvis").mkdir(parents=True)
+    (root / "src" / "lalein").mkdir(parents=True)
     (root / ".git").mkdir()
     (root / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
-    return root / "src" / "zundamon_jarvis"
+    return root / "src" / "lalein"
 
 
 def _no_tools():
@@ -158,16 +158,16 @@ def test_detect_worktree_checkout(tmp_path):
 
 
 def test_detect_uv_tool_by_its_receipt(tmp_path):
-    env = tmp_path / "tools" / "zundamon-jarvis"
-    pkg = env / "lib" / "python3.12" / "site-packages" / "zundamon_jarvis"
+    env = tmp_path / "tools" / "lalein"
+    pkg = env / "lib" / "python3.12" / "site-packages" / "lalein"
     pkg.mkdir(parents=True)
     (env / "uv-receipt.toml").write_text("[tool]\n", encoding="utf-8")
     assert update.detect_install(prefix=env, package_dir=pkg, uv_tool_dir=_no_tools) == update.Install("uv-tool", env)
 
 
 def test_detect_uv_tool_by_uv_tool_dir(tmp_path):
-    env = tmp_path / "tools" / "zundamon-jarvis"
-    pkg = env / "Lib" / "site-packages" / "zundamon_jarvis"
+    env = tmp_path / "tools" / "lalein"
+    pkg = env / "Lib" / "site-packages" / "lalein"
     pkg.mkdir(parents=True)
     got = update.detect_install(prefix=env, package_dir=pkg, uv_tool_dir=lambda: tmp_path / "tools")
     assert got.kind == "uv-tool"
@@ -177,7 +177,7 @@ def test_detect_uv_tool_by_uv_tool_dir(tmp_path):
 
 def test_detect_editable_tool_install_of_a_checkout(tmp_path):
     pkg = _checkout(tmp_path / "repo")
-    env = tmp_path / "tools" / "zundamon-jarvis"
+    env = tmp_path / "tools" / "lalein"
     env.mkdir(parents=True)
     (env / "uv-receipt.toml").write_text("", encoding="utf-8")
     assert update.detect_install(prefix=env, package_dir=pkg, uv_tool_dir=_no_tools).kind == "editable-tool"
@@ -204,10 +204,13 @@ def test_find_uv(tmp_path):
 # ---- the helper scripts ----
 
 def test_source_is_the_tag_zip_like_install_ps1():
-    assert update.source("v0.2.0") == ("zundamon-jarvis @ https://github.com/dyoshyy/zundamon-jarvis"
+    # before 0.6 the distribution is still called zundamon-jarvis
+    assert update.source("v0.2.0") == ("zundamon-jarvis @ https://github.com/dyoshyy/lalein"
                                        "/archive/refs/tags/v0.2.0.zip")
+    assert update.source("v0.6.0") == ("lalein @ https://github.com/dyoshyy/lalein"
+                                       "/archive/refs/tags/v0.6.0.zip")
     ps1 = (Path(__file__).resolve().parents[2] / "install.ps1").read_text(encoding="utf-8")
-    assert "zundamon-jarvis @ https://github.com/$OwnerRepo/archive/refs/tags/$Version.zip" in ps1
+    assert "$dist @ https://github.com/$OwnerRepo/archive/refs/tags/$Version.zip" in ps1
 
 
 def _order(text, *needles):
@@ -219,7 +222,7 @@ def test_windows_script_stops_installs_and_starts_again():
     s = update.windows_script(r"C:\Users\o'neil\.local\bin\uv.exe", r"C:\Users\o'neil\zj.exe", "v0.2.0",
                               Path(r"C:\data\update.running"))
     assert r"$uv = 'C:\Users\o''neil\.local\bin\uv.exe'" in s  # PowerShell's quote doubling
-    assert "$source = 'zundamon-jarvis @ https://github.com/dyoshyy/zundamon-jarvis/archive/refs/tags/v0.2.0.zip'" in s
+    assert "$source = 'zundamon-jarvis @ https://github.com/dyoshyy/lalein/archive/refs/tags/v0.2.0.zip'" in s
     _order(s, "& $zj service stop", "& $uv tool install --force --python 3.12 $source", "& $zj service start",
            "Remove-Item -LiteralPath $marker")
     # the service is started again whether the install worked or not: not inside an if
@@ -229,14 +232,16 @@ def test_windows_script_stops_installs_and_starts_again():
 
 def test_mac_script_takes_the_agents_out_and_puts_them_back():
     s = update.posix_script("mac", "/Users/me/.local/bin/uv", "/Users/me/zj", "v0.2.0", Path("/d/update.running"), 501)
-    _order(s, "launchctl bootout gui/501/dev.zundamon-jarvis.menubar", "launchctl bootout gui/501/dev.zundamon-jarvis.daemon",
-           '"$UV" tool install --force --python 3.12 "$SOURCE"', "'/Users/me/zj' service install", 'rm -f "$MARKER"')
+    _order(s, "launchctl bootout gui/501/dev.lalein.menubar", "launchctl bootout gui/501/dev.lalein.daemon",
+           "launchctl bootout gui/501/dev.zundamon-jarvis.daemon",  # an install from before the rename
+           '"$UV" tool install --force --python 3.12 "$SOURCE"', '"$ZJ" service install', 'rm -f "$MARKER"')
+    assert "ZJ='/Users/me/zj'" in s
     assert "voicevox" not in s  # the engine is not in the tool environment
 
 
 def test_linux_script_restarts_the_unit_if_it_runs():
     s = update.posix_script("linux", "/u/uv", "/u/zj", "v0.2.0", Path("/d/update.running"), 1000)
-    assert "systemctl --user try-restart zundamon-jarvis.service" in s
+    assert "systemctl --user try-restart lalein.service zundamon-jarvis.service" in s
     assert "launchctl" not in s
 
 
@@ -274,12 +279,42 @@ def test_mac_script_run_against_stubs(tmp_path, uv_ok):
     lines = calls.read_text(encoding="utf-8").splitlines()
     installs = [line for line in lines if line.startswith("uv tool install")]
     assert len(installs) == (1 if uv_ok else update.INSTALL_TRIES)
-    assert installs[0].endswith("zundamon-jarvis @ https://github.com/dyoshyy/zundamon-jarvis/archive/refs/tags/v0.2.0.zip")
-    assert lines[:2] == ["launchctl bootout gui/501/dev.zundamon-jarvis.menubar",
-                         "launchctl bootout gui/501/dev.zundamon-jarvis.daemon"]
+    assert installs[0].endswith("zundamon-jarvis @ https://github.com/dyoshyy/lalein/archive/refs/tags/v0.2.0.zip")
+    assert lines[:2] == ["launchctl bootout gui/501/dev.lalein.menubar",
+                         "launchctl bootout gui/501/dev.lalein.daemon"]
     assert lines[-1] == "zj service install"  # also after a failed install
     assert r.returncode == (0 if uv_ok else 1)
     assert not marker.exists()
+
+
+@POSIX_ONLY
+@pytest.mark.parametrize("uv_ok", [True, False])
+def test_the_rename_run_against_stubs(tmp_path, uv_ok):
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    calls = tmp_path / "calls"
+    rec = f'echo "$(basename "$0") $*" >> "{calls}"\n'
+    _stub(bin_ / "launchctl", rec)
+    _stub(bin_ / "sleep", "exit 0\n")
+    # uv: uninstall works; installing lalein works or not; putting zundamon-jarvis back works
+    uv = _stub(bin_ / "uv", rec + ('case "$*" in *"lalein @"*) exit ' + ("0" if uv_ok else "1") + ";; esac\nexit 0\n"))
+    old, new = _stub(bin_ / "zundamon-jarvis", rec), _stub(bin_ / "lalein", rec)
+    marker = tmp_path / "update.running"
+    rename = update.Rename("zundamon-jarvis", "v0.5.0", str(new))
+    script = tmp_path / "update.sh"
+    script.write_text(update.posix_script("mac", str(uv), str(old), "v0.6.0", marker, 501, rename), encoding="utf-8")
+    env = {"PATH": f"{bin_}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(tmp_path)}
+    subprocess.run(["/bin/sh", str(script)], env=env, capture_output=True, text=True, timeout=30)
+    lines = calls.read_text(encoding="utf-8").splitlines()
+    uvs = [line for line in lines if line.startswith("uv ")]
+    assert uvs[0] == "uv tool uninstall zundamon-jarvis"
+    if uv_ok:
+        assert uvs[1:] == ["uv tool install --force --python 3.12 lalein @ "
+                           "https://github.com/dyoshyy/lalein/archive/refs/tags/v0.6.0.zip"]
+        assert lines[-1] == "lalein service install"  # the new tool starts it
+    else:
+        assert uvs[-1].endswith("zundamon-jarvis @ https://github.com/dyoshyy/lalein/archive/refs/tags/v0.5.0.zip")
+        assert lines[-1] == "zundamon-jarvis service install"  # back as it was
 
 
 def test_helper_per_os(tmp_path):
@@ -369,11 +404,11 @@ def test_git_refusal(tmp_path):
 def test_git_steps_per_os():
     linux = [s.argv for s in update.git_steps("linux", "uv", "zj")]
     assert linux == [["git", "pull", "--ff-only"], ["uv", "sync"],
-                     ["systemctl", "--user", "try-restart", "zundamon-jarvis.service"],
-                     ["zundamon-jarvisctl", "character", "restart"]]
+                     ["systemctl", "--user", "try-restart", "lalein.service"],
+                     ["laleinctl", "character", "restart"]]
     mac = [s.argv for s in update.git_steps("mac", "uv", "zj", 501)]
-    assert mac[2:] == [["launchctl", "kickstart", "-k", "gui/501/dev.zundamon-jarvis.daemon"],
-                       ["launchctl", "kickstart", "-k", "gui/501/dev.zundamon-jarvis.menubar"]]
+    assert mac[2:] == [["launchctl", "kickstart", "-k", "gui/501/dev.lalein.daemon"],
+                       ["launchctl", "kickstart", "-k", "gui/501/dev.lalein.menubar"]]
     win = update.git_steps("windows", "uv", "zj")
     assert win[0].argv == ["zj", "service", "stop"] and win[-1].argv == ["zj", "service", "start"] and win[-1].always
 
@@ -392,7 +427,7 @@ def test_run_steps_stops_at_a_failure_but_runs_the_always_ones(tmp_path):
     assert update.run_steps(steps[2:], tmp_path, lambda a, c: 1 if a == ["start"] else 0) is None  # not required
 
 
-# ---- `zundamon-jarvis update` ----
+# ---- `lalein update` ----
 
 class World:
     def __init__(self, tmp_path, kind="uv-tool", installed="0.1.0", latest="v0.2.0", answer="", system="windows"):
@@ -412,7 +447,7 @@ class World:
             system=system, now=lambda: 50_000.0, fetch=lambda: self.latest, installed=lambda: installed,
             install=lambda: update.Install(kind, root if kind in ("git", "editable-tool") else tmp_path / "tool"),
             data_dir=lambda s: self.data, log_dir=lambda s: self.logs,
-            find_uv=lambda: "/u/uv", find_exe=lambda s: "/u/zundamon-jarvis", uid=lambda: 501,
+            find_uv=lambda: "/u/uv", find_exe=lambda s: "/u/lalein", uid=lambda: 501,
             git=self.git, run_visible=lambda argv, cwd: self.ran.append(argv) or 0,
             spawn=lambda argv, s, lp: self.spawned.append(argv), ask=ask,
             out=self.out.append, err=self.err.append, lang="en")
@@ -452,7 +487,7 @@ def test_update_asks_then_starts_the_helper(tmp_path):
     assert w.asked and "[Y/n]" in w.asked[0]
     assert w.spawned == [["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
                           "-WindowStyle", "Hidden", "-File", str(w.data / "update.ps1")]]
-    assert "$zj = '/u/zundamon-jarvis'" in (w.data / "update.ps1").read_text(encoding="utf-8-sig")
+    assert "$zj = '/u/lalein'" in (w.data / "update.ps1").read_text(encoding="utf-8-sig")
     assert any("Updating in the background" in line for line in w.out)
 
 
@@ -520,7 +555,7 @@ def test_editable_tool_is_left_to_the_user(tmp_path):
 
 def test_usage(tmp_path):
     w = World(tmp_path)
-    assert w.main("--force") == 2 and w.err == ["usage: zundamon-jarvis update [--check] [--yes]"]
+    assert w.main("--force") == 2 and w.err == ["usage: lalein update [--check] [--yes]"]
 
 
 def test_git_check_and_update(tmp_path):
@@ -530,7 +565,7 @@ def test_git_check_and_update(tmp_path):
     w2 = World(tmp_path, kind="git", system="linux")
     assert w2.main("--yes") == 0
     assert w2.ran[:3] == [["git", "pull", "--ff-only"], ["/u/uv", "sync"],
-                          ["systemctl", "--user", "try-restart", "zundamon-jarvis.service"]]
+                          ["systemctl", "--user", "try-restart", "lalein.service"]]
     assert w2.ran[3][1:] == ["character", "restart"]
     assert "Updated, and the service was restarted." in w2.out
 
@@ -555,7 +590,7 @@ def test_git_up_to_date_and_failures(tmp_path):
 
 def test_cli_dispatches_update(monkeypatch):
     seen = []
-    monkeypatch.setattr("zundamon_jarvis.system.update.main", lambda argv: seen.append(argv) or 0)
+    monkeypatch.setattr("lalein.system.update.main", lambda argv: seen.append(argv) or 0)
     assert cli.main(["update", "--check"]) == 0
     assert seen == [["--check"]]
     assert "update" in cli.USAGE
@@ -606,7 +641,7 @@ def test_launch_from_menu_runs_update_yes_detached_into_the_log(monkeypatch, tmp
     _home(monkeypatch, tmp_path)
     got = []
     update.launch_from_menu("windows", exe="zj.exe", spawn=lambda argv, s, lp: got.append((argv, s, lp)))
-    assert got == [(["zj.exe", "update", "--yes"], "windows", tmp_path / "local" / "zundamon-jarvis" / "logs" / "update.log")]
+    assert got == [(["zj.exe", "update", "--yes"], "windows", tmp_path / "local" / "lalein" / "logs" / "update.log")]
 
     def fail(*a):
         raise OSError("x")
@@ -666,3 +701,34 @@ def test_spawn_detached_windows_gives_a_hidden_console_outside_the_job(monkeypat
     assert flags[1] == update.CREATE_NO_WINDOW | update.CREATE_NEW_PROCESS_GROUP
     assert not flags[0] & 0x00000008  # DETACHED_PROCESS: its console children would each open a window
 
+
+
+# ---- the rename: zundamon-jarvis (up to 0.5) -> lalein (0.6 on) ----
+
+def test_releases_before_0_6_are_distributed_under_the_old_name():
+    assert update.dist_for("v0.5.0") == "zundamon-jarvis" and update.dist_for("v0.5.9") == "zundamon-jarvis"
+    assert update.dist_for("v0.6.0") == "lalein" and update.dist_for("v1.0.0") == "lalein"
+
+
+def test_an_update_across_the_rename_knows_both_names(monkeypatch):
+    monkeypatch.setattr(update, "installed_dist", lambda: "zundamon-jarvis")
+    r = update.rename_for("v0.6.0", "0.5.0", "/Users/me/.local/bin/lalein")
+    assert r == update.Rename("zundamon-jarvis", "v0.5.0", str(Path("/Users/me/.local/bin/lalein")))  # this OS's path
+    win = update.rename_for("v0.6.0", "0.5.0", r"C:\Users\me\.local\bin\lalein.exe")
+    assert win.exe.endswith("lalein.exe")
+    assert update.rename_for("v0.5.1", "0.5.0", "/x/lalein") is None  # same name
+    monkeypatch.setattr(update, "installed_dist", lambda: "lalein")
+    assert update.rename_for("v0.7.0", "0.6.0", "/x/lalein") is None
+
+
+def test_the_rename_script_uninstalls_first_and_puts_the_old_one_back_if_it_must():
+    r = update.Rename("zundamon-jarvis", "v0.5.0", "/Users/me/.local/bin/lalein")
+    s = update.posix_script("mac", "/u/uv", "/Users/me/.local/bin/zundamon-jarvis", "v0.6.0", Path("/d/m"), 501, r)
+    _order(s, '"$UV" tool uninstall \'zundamon-jarvis\'', '"$UV" tool install --force --python 3.12 "$SOURCE"',
+           "ZJ='/Users/me/.local/bin/lalein'", '"$ZJ" service install')
+    assert "lalein @ https://github.com/dyoshyy/lalein/archive/refs/tags/v0.6.0.zip" in s
+    assert "zundamon-jarvis @ https://github.com/dyoshyy/lalein/archive/refs/tags/v0.5.0.zip" in s  # the way back
+    w = update.windows_script(r"C:\uv.exe", r"C:\bin\zundamon-jarvis.exe", "v0.6.0", Path(r"C:\d\m"),
+                              update.Rename("zundamon-jarvis", "v0.5.0", r"C:\bin\lalein.exe"))
+    _order(w, "& $uv tool uninstall 'zundamon-jarvis'", "& $uv tool install --force", r"$zj = 'C:\bin\lalein.exe'",
+           "& $zj service start")
