@@ -428,6 +428,21 @@ def _clean(text: object) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+_MAX_SPOKEN_PATH = 30
+
+
+def _spoken_path(path: object) -> str:
+    """A path as it is read aloud: the last two parts ("tmp の h スター.db"), wildcards spoken as スター."""
+    raw = str(path).strip().replace("\\", "/")
+    parts = [p for p in raw.split("/") if p and p != "."]
+    if not parts:
+        return "ルート" if raw.startswith("/") else ""
+    tail = [_clean(p.replace("*", " スター ").replace("?", " 何か ")) for p in parts[-2:]]
+    tail = [t.replace(" .", ".").replace(". ", ".") if t else t for t in tail if t]
+    out = " の ".join(tail)
+    return out if len(out) <= _MAX_SPOKEN_PATH else "…" + out[-_MAX_SPOKEN_PATH:]
+
+
 def _spoken_when(value: object) -> str:
     if isinstance(value, dict):
         value = value.get("dateTime") or value.get("date")
@@ -590,10 +605,8 @@ def _describe_bash(command: str) -> str:
         return f"{_clean(f.cmd.split('.')[0])} でディスクを初期化するけど、いい？"
     args = f.args[1:] if f.cmd == "gio" else f.args
     raw = _targets(args, ("-s", "--size", "-r", "--reference") if f.cmd == "truncate" else ())
-    if any("*" in t for t in raw):
-        return f"{f.cmd} でまとめてファイルを消すけど、いい？"
-    names = [n for n in (_clean(t) for t in raw) if n][:2]
-    target = "と".join(names)
+    names = [n for n in (_spoken_path(t) for t in raw) if n][:2]
+    target = " と ".join(names)
     if f.cmd.startswith("trash") or (f.cmd == "gio" and f.args[0] == "trash"):
         return f"{target or 'ファイル'} をゴミ箱に入れるけど、いい？"
     if f.cmd == "truncate":
@@ -625,7 +638,7 @@ def describe_action(tool: str, input: dict) -> str:
         return "ページのデータを消すけど、いい？"
     if tool in _FILE_WRITE_TOOLS:
         path = input.get(_FILE_WRITE_TOOLS[tool]) or input.get("file_path") or ""
-        name = _clean(Path(str(path)).name)
+        name = _spoken_path(path)
         target = f"「{name}」" if name else "ファイル"
         return f"{target}を書き換えるけど、いい？"
     name = _clean(tool)
