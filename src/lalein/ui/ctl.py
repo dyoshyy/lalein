@@ -53,7 +53,7 @@ from lalein.ui import desktop
 
 USAGE = ("laleinctl toggle|pause|resume|status|debug|get|bar|watch|settings"
          "|set speed|speaker|model|mic|language <value>|window [watch|settings]|character [state [look]]"
-         "|character hide|show|toggle|restart|avatar <look>|monitor <connector>")
+         "|character hide|show|toggle|restart|avatar <look>|monitor <connector>|show [file.html]|board")
 TEXT = {
     "usage": {"ja": "使い方: {usage}", "en": "usage: {usage}"},
     "tooltip": {"ja": "ラレイン: {state} — クリック: 会話、右クリック: 設定、{hotkey}: 一時停止/再開",
@@ -561,6 +561,14 @@ def main(argv: list[str] | None = None) -> int:
         return code
     if args[:1] == ["character"] and len(args) <= 3:
         return _character(*args[1:])
+    if args[:1] == ["show"] and len(args) <= 2:
+        from lalein.ui import board
+
+        return board.show(Path(args[1]) if len(args) == 2 else None)
+    if args[:1] == ["board"]:
+        from lalein.ui import board
+
+        return board.main(args[1:])
     if args[:1] == ["window"] and len(args) <= 2:
         return open_window(args[1] if len(args) == 2 else "watch")
     if args[:1] == ["set"] and len(args) == 3:

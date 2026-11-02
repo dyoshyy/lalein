@@ -25,6 +25,10 @@ Read this when the user asks how you (Lalein) work, where something is kept, or 
   - `laleinctl settings` is the settings window: voice, speed, model, mic and language.
   - On Linux with Hyprland, `laleinctl window watch|settings` toggles them as floating windows (window classes `lalein-watch` and `lalein-settings`).
 
+- **Board:** a window for the pages Lalein makes while it explains something: diagrams, tables, steps.
+  - `laleinctl show <file.html>` puts a page on it and opens the window. `laleinctl show` alone brings back the latest page.
+  - It is served from 127.0.0.1 with a random token. Pages are kept in `board/` in the logs folder, and the window's menu lists the earlier ones.
+
 ## Confirmations
 
 A spoken yes or no is asked before these, and nothing else:
