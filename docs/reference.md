@@ -114,11 +114,11 @@ If it doesn't start at login, check that **Lalein** is on in Settings > Apps > S
   - Linux: `zundamon-jarvis.service` becomes `lalein.service`, and `voicevox.service` is rewritten for the new folder.
   - macOS: the `dev.zundamon-jarvis.*` agents become `dev.lalein.*`.
   - Windows: the `ZundamonJarvis` Run value becomes `Lalein`.
-- **Commands:** `lalein`, `laleinctl` and `laleinw` are new. The old command names still run the same programs.
+- **Commands:** `lalein`, `laleinctl` and `laleinw`. 0.5 kept the old names as aliases; 0.6 dropped them.
 - **By hand:**
   - Window rules and key bindings that name `zundamon-jarvis-watch`, `zundamon-jarvis-settings` or `zundamon-jarvis-character` need the new names: `lalein-watch`, `lalein-settings` and `lalein-character`.
   - The Linux echo-cancel setup keeps its names, such as `zundamon_jarvis_aec_source`.
-- **Updates:** 0.5 is still distributed as `zundamon-jarvis`, so older installs can update to it. From 0.6 the distribution is `lalein`, and 0.5's updater switches over by itself.
+- **Updates:** 0.5 was still distributed as `zundamon-jarvis`. From 0.6 the distribution is `lalein`, and 0.5's updater switches over by itself. The updater of 0.4 or earlier asks for `zundamon-jarvis` and fails on 0.6, leaving the old version as it was: on macOS and Windows, run the installer again. A Linux git checkout updates with `git pull`, but its old unit runs `.venv/bin/zundamon-jarvis`, which 0.6 no longer has: run `.venv/bin/lalein migrate` once.
 
 ## Troubleshooting
 
