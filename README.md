@@ -5,7 +5,8 @@ English | [日本語](#日本語)
 > **Formerly zundamon-jarvis.** Lalein (λαλεῖν) is Greek for "to talk". An install from before
 > the rename moves itself on its first start after the update: its settings, logs and the voice
 > engine move to the new folders, and its login services are registered under the new name. The
-> old commands (`zundamon-jarvis`, `zundamon-jarvisctl`) keep working for now.
+> commands are `lalein` and `laleinctl` (the old names went in 0.6). An install of 0.4 or earlier
+> on macOS or Windows can't update to 0.6 by itself: run the installer again.
 
 A hands-free voice assistant for [Claude Code](https://claude.com/claude-code), voiced by VOICEVOX's Zundamon.
 You talk, it transcribes locally, asks Claude Code, and answers out loud.
@@ -91,7 +92,8 @@ Settings, file locations, the Windows service and troubleshooting are in [docs/r
 
 > **旧名は zundamon-jarvis です。** Lalein（ラレイン、λαλεῖν）はギリシャ語で「話す」という意味です。
 > 改名前に入れた環境は、更新後の最初の起動で自動的に引っ越します。設定、ログ、音声エンジンは新しいフォルダへ移り、
-> ログイン時の自動起動も新しい名前で登録し直されます。古いコマンド（`zundamon-jarvis`、`zundamon-jarvisctl`）も、しばらくはそのまま使えます。
+> ログイン時の自動起動も新しい名前で登録し直されます。コマンドは `lalein` と `laleinctl` です（旧名のコマンドは 0.6 でなくなりました）。
+> macOS と Windows で 0.4 以前を使っている場合、0.6 へは自動で更新できないので、インストーラーをもう一度実行してください。
 
 [Claude Code](https://claude.com/claude-code) を声で使える、VOICEVOX ずんだもんの音声アシスタントです。
 話しかけると、手元で文字にして Claude Code に聞き、声で答えます。
