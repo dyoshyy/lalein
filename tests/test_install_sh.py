@@ -42,7 +42,6 @@ class Env:
         _stub(self.bin, "uname", 'case "$1" in -s) echo Darwin;; -m) echo arm64;; esac\n')
         _stub(self.bin, "sw_vers", "echo 14.5\n")
         _stub(self.bin, "claude", "exit 0\n")
-        _stub(self.bin, "git", "exit 0\n")
         _stub(self.bin, "df", 'echo "Filesystem 1024-blocks Used Available Capacity Mounted"\n'
                               'echo "/dev/x 999 1 99999999 1% /"\n')
         _stub(self.bin, "curl", log + 'case "$*" in\n'
@@ -51,7 +50,7 @@ class Env:
         _stub(self.bin, "uv", log + failcheck +
               'case "$1 $2" in\n'
               f'  "tool dir") echo "{self.home}/.local/bin";;\n'
-              f'  "tool install") for a in "$@"; do case "$a" in git+*) echo "${{a##*@}}" | sed "s/^v//" > "{self.ver}";; esac; done;'
+              f'  "tool install") for a in "$@"; do case "$a" in *archive/refs/tags/*) echo "${{a##*/}}" | sed "s/^v//; s/[.]zip$//" > "{self.ver}";; esac; done;'
               f' cp "{self.bin}/zj-real" "{self.bin}/lalein";;\nesac\n')
         _stub(self.bin, "zj-real", f'''if [ "$1" = "--version" ]; then cat "{self.ver}"; exit 0; fi
 echo "lalein $*" >> "{self.log}"
@@ -76,7 +75,9 @@ def test_second_run_skips_tool_install_and_reruns_setup(env):
     first = env.run()
     assert first.returncode == 0, first.stderr
     calls = env.calls()
-    assert any(c.startswith("uv tool install --force --python 3.12 git+https://github.com/dyoshyy/lalein@v0.1.0") for c in calls)
+    # the release's source zip, under the name it was distributed as (0.5 and before: zundamon-jarvis)
+    assert any(c.startswith("uv tool install --force --python 3.12 zundamon-jarvis @ "
+                            "https://github.com/dyoshyy/lalein/archive/refs/tags/v0.1.0.zip") for c in calls)
     # the setup page fetches the engine and the model itself, with progress
     zj = [c for c in calls if c.startswith("lalein")]
     assert zj == ["lalein setup"]
@@ -104,7 +105,7 @@ def test_install_forces_reinstall_when_version_differs(env):
     env.log.write_text("")
     r = env.run(ZJ_VERSION="v0.2.0")
     assert r.returncode == 0, r.stderr
-    assert any(c.startswith("uv tool install --force --python 3.12") and c.endswith("@v0.2.0") for c in env.calls())
+    assert any(c.startswith("uv tool install --force --python 3.12") and c.endswith("/v0.2.0.zip") for c in env.calls())
 
 
 def test_install_refuses_intel_mac(env):
@@ -123,12 +124,39 @@ def test_install_refuses_old_macos(env):
     assert env.calls() == []
 
 
-def test_install_points_linux_to_readme(env):
+def _linux(env, gpu=True, systemd=True):
     _stub(env.bin, "uname", 'case "$1" in -s) echo Linux;; -m) echo x86_64;; esac\n')
+    _stub(env.bin, "nvidia-smi", "echo 'GPU 0: NVIDIA'\n" if gpu else "exit 9\n")
+    _stub(env.bin, "systemctl", "exit 0\n" if systemd else "echo 'Failed to connect to bus' >&2; exit 1\n")
+
+
+def test_linux_installs_with_one_line_too(env):
+    _linux(env)
+    r = env.run(ZJ_VERSION="v0.7.0")
+    assert r.returncode == 0, r.stderr
+    calls = env.calls()
+    assert "uv tool install --force --python 3.12 lalein @ https://github.com/dyoshyy/lalein/archive/refs/tags/v0.7.0.zip" in calls
+    assert [c for c in calls if c.startswith("lalein")] == ["lalein setup"]
+
+
+@pytest.mark.parametrize("gpu, systemd, says", [(False, True, "NVIDIA"), (True, False, "systemd")])
+def test_linux_needs_an_nvidia_gpu_and_a_systemd_user_session(env, gpu, systemd, says):
+    _linux(env, gpu=gpu, systemd=systemd)
     r = env.run()
-    assert r.returncode != 0
-    assert "README" in r.stdout + r.stderr
-    assert "https://github.com/dyoshyy/lalein#linux" in r.stdout + r.stderr
+    assert r.returncode != 0 and says in r.stdout + r.stderr
+    assert not any(c.startswith("uv ") for c in env.calls())
+
+
+def test_linux_on_arm_is_refused(env):
+    _linux(env)
+    _stub(env.bin, "uname", 'case "$1" in -s) echo Linux;; -m) echo aarch64;; esac\n')
+    r = env.run()
+    assert r.returncode != 0 and "x86_64" in r.stdout + r.stderr
+
+
+def test_no_git_is_needed(env):
+    assert not (env.bin / "git").exists()  # the release zip, not git+https
+    assert env.run().returncode == 0
 
 
 def test_install_stops_without_claude(env):
@@ -175,7 +203,7 @@ def test_unfinished_setup_page_says_how_to_continue(env):
 def test_install_uses_zj_version_without_asking_github(env):
     r = env.run(ZJ_VERSION="v9.9.9")
     assert r.returncode == 0, r.stderr
-    assert any(c.endswith("lalein@v9.9.9") for c in env.calls())
+    assert any(c.endswith("lalein @ https://github.com/dyoshyy/lalein/archive/refs/tags/v9.9.9.zip") for c in env.calls())
     assert not any("api.github.com" in c for c in env.calls())
 
 
@@ -223,19 +251,11 @@ def test_install_sh_passes_shellcheck():
     assert r.returncode == 0, r.stdout
 
 
-def test_install_stops_without_git(env):
-    (env.bin / "git").unlink()
+def test_the_macos_git_shim_does_not_matter(env):
+    _stub(env.bin, "git", "exit 1\n")  # /usr/bin/git without the command line tools
     r = env.run()
-    assert r.returncode != 0
-    assert "xcode-select --install" in r.stdout + r.stderr
-    assert not any(c.startswith("uv ") for c in env.calls())
-
-
-def test_install_stops_when_git_is_only_the_clt_shim(env):
-    _stub(env.bin, "git", "exit 1\n")
-    r = env.run()
-    assert r.returncode != 0
-    assert "xcode-select --install" in r.stdout + r.stderr
+    assert r.returncode == 0, r.stderr
+    assert "xcode-select" not in r.stdout + r.stderr
 
 
 def test_install_finds_claude_in_local_bin(env):

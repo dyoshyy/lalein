@@ -92,17 +92,17 @@ If it doesn't start at login, check that **Lalein** is on in Settings > Apps > S
 ## Linux extras
 
 - **Without the setup page:**
-  1. `uv run lalein engine install` (add `--cpu` for the CPU build)
-  2. `uv run lalein models download`
-  3. `uv run lalein setup --cli`
-- **Units by hand:**
-  1. Copy `deploy/systemd/*.service` to `~/.config/systemd/user/`.
-  2. `systemctl --user daemon-reload && systemctl --user enable --now voicevox lalein`.
+  1. `lalein engine install` (add `--cpu` for the CPU build)
+  2. `lalein models download`
+  3. `lalein setup --cli`
+- **Units:** `lalein service install` writes `lalein.service` and `voicevox.service` to `~/.config/systemd/user/` and starts them.
   - Logs: `journalctl --user -u lalein`.
 - **Echo cancellation** (PipeWire WebRTC AEC, lets you use speakers):
-  1. Run `deploy/install-audio.sh`.
+  1. Run `lalein audio install`.
   2. Set `mic_device = "zundamon_jarvis_aec_source"`.
-  - To pin a mic, edit `deploy/pipewire/zundamon-jarvis-echo-cancel.conf` first.
+  - `lalein audio output auto|bluez|hdmi|<sink>` chooses where the sound goes. `lalein audio uninstall` takes it all out.
+  - To pin a mic, edit `~/.config/pipewire/pipewire.conf.d/zundamon-jarvis-echo-cancel.conf` after installing, then restart PipeWire.
+- **From a git clone** (for development): `git clone https://github.com/dyoshyy/lalein && cd lalein && uv sync && uv run lalein setup`. `lalein update` then runs `git pull` and `uv sync`.
 - **Omarchy / Hyprland:**
   - Bind a key to `laleinctl toggle`.
   - Add a bar module running `laleinctl bar`. Click opens `laleinctl window`; right-click opens `window settings`.

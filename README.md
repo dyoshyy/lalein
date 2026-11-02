@@ -29,11 +29,14 @@ so install the Claude Code CLI first:
 If the CLI installer says `~/.local/bin` (Windows: `%USERPROFILE%\.local\bin`) is not on your PATH, add it and
 reopen the terminal. Then run `claude` once and log in. `claude --version` should work before you go on.
 
-**Mac**
+**Mac and Linux**
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/dyoshyy/lalein/main/install.sh | sh
 ```
+
+On Linux you also need an NVIDIA GPU with its driver, PipeWire and a systemd user session. The on-screen
+character needs GTK4 and gtk4-layer-shell with their Python bindings (Arch: `python-gobject gtk4 gtk4-layer-shell`).
 
 **Windows** (PowerShell, no admin rights needed)
 
@@ -45,16 +48,9 @@ The installer opens the setup window. It downloads the voice engine and the spee
 through the login check, mic, voice, notes folder and model, and starts the background service. Running
 the same line again is safe. To run setup again later, use `lalein setup` (`--cli` runs it in the terminal).
 
-## Linux
+## Linux extras
 
-Clone it anywhere; the examples use `~/repos/lalein`, and the systemd unit runs it from where it is. You need `uv`, PipeWire and a systemd user session.
-
-```sh
-git clone https://github.com/dyoshyy/lalein ~/repos/lalein
-cd ~/repos/lalein && uv sync && uv run lalein setup
-```
-
-Echo cancellation (so you can use speakers) and the Hyprland bar module are optional; see [docs/reference.md](docs/reference.md).
+Echo cancellation (`lalein audio install`, so you can use speakers) and the Hyprland bar module are optional; see [docs/reference.md](docs/reference.md). To work on Lalein itself, run it from a git clone (also there).
 
 ## Use
 
@@ -116,7 +112,8 @@ Settings, file locations, the Windows service and troubleshooting are in [docs/r
 CLI のインストーラが「`~/.local/bin`（Windows は `%USERPROFILE%\.local\bin`）が PATH に入っていない」と言ったら、PATH に足してからターミナルを開き直します。
 そのあと `claude` を一度起動してログインします。`claude --version` が動けば準備完了です。
 
-上の Install にあるコマンドを、Mac はターミナル、Windows は PowerShell で実行します。
+上の Install にあるコマンドを、Mac と Linux はターミナル、Windows は PowerShell で実行します。
+Linux では、NVIDIA の GPU とドライバー、PipeWire、systemd のユーザーセッションも必要です。画面のキャラクターには GTK4 と gtk4-layer-shell、その Python バインディングが要ります（Arch なら `python-gobject gtk4 gtk4-layer-shell`）。
 
 すると設定画面が開き、次のことをこの順で行います。
 
@@ -127,7 +124,7 @@ CLI のインストーラが「`~/.local/bin`（Windows は `%USERPROFILE%\.loca
 
 何度実行しても大丈夫です。あとから設定し直すときは `lalein setup` を使います（`--cli` を付けるとターミナルで設定します）。
 
-Linux では、上の Linux の手順どおりに clone（例は `~/repos/lalein`。場所はどこでも構いません）して `uv sync` と `setup` を実行します。
+スピーカーで使うときは、Linux では `lalein audio install` でエコーキャンセルを入れられます。Lalein 自体を開発するときは git clone から動かします（docs/reference.md を参照）。
 
 ## 使い方
 

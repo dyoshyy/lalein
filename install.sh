@@ -1,5 +1,5 @@
 #!/bin/sh
-# lalein one-line installer (Apple Silicon macOS 14+)
+# lalein one-line installer (Apple Silicon macOS 14+, or x86_64 Linux with an NVIDIA GPU and systemd)
 #   curl -fsSL https://raw.githubusercontent.com/dyoshyy/lalein/main/install.sh | sh
 # 環境変数: ZJ_VERSION=v0.1.0 (版を固定) / ZJ_DRY_RUN=1 (実行せず表示だけ)
 #           ZJ_CLI=1 (設定をブラウザでなくターミナルで行う。エンジンとモデルもここで取得する)
@@ -51,6 +51,52 @@ run() {
   "$@" </dev/null || fail_step
 }
 
+check_linux() {
+  if [ "$ARCH" != x86_64 ]; then
+    die "$(msg "対応していない環境です（Linux / $ARCH）。x86_64 の Linux が必要です。" \
+      "Not supported here (Linux / $ARCH): you need x86_64 Linux.")"
+  fi
+  if ! command -v nvidia-smi >/dev/null 2>&1 || ! nvidia-smi -L >/dev/null 2>&1; then
+    die "$(msg "NVIDIA の GPU が見つかりません（nvidia-smi が動きません）。Linux 版は文字起こしと音声合成に NVIDIA の GPU とドライバーを使います。" \
+      "No NVIDIA GPU found (nvidia-smi does not work). On Linux, speech recognition and the voice use an NVIDIA GPU and its driver.")"
+  fi
+  if ! command -v systemctl >/dev/null 2>&1 || ! systemctl --user show-environment >/dev/null 2>&1; then
+    die "$(msg "systemd のユーザーセッションが使えません。Lalein は systemd のユーザーサービスとして動きます。" \
+      "No systemd user session. Lalein runs as a systemd user service.")"
+  fi
+  # 画面のキャラクターは OS の Python の GTK で動く。無くてもほかは動くので、知らせるだけ
+  if ! /usr/bin/python3 -c 'import gi; gi.require_version("Gtk", "4.0"); gi.require_version("Gtk4LayerShell", "1.0")' >/dev/null 2>&1; then
+    say "    $(msg "注意: 画面のキャラクターには、GTK4 と gtk4-layer-shell と、その Python バインディングが要ります（Arch: sudo pacman -S python-gobject gtk4 gtk4-layer-shell）。キャラクター以外は、なくても動きます。" \
+      "Note: the on-screen character needs GTK4, gtk4-layer-shell and their Python bindings (Arch: sudo pacman -S python-gobject gtk4 gtk4-layer-shell). Everything else works without them.")"
+  fi
+}
+
+check_mac() {
+  if [ "$ARCH" != arm64 ] && [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || echo 0)" = 1 ]; then
+    die "$(msg "ターミナルが Rosetta で動いています。Rosetta を使わずに開き直してから、もう一度実行してください。" \
+      "Your terminal is running under Rosetta. Reopen it without Rosetta and run this again.")"
+  fi
+  if [ "$OS" != Darwin ] || [ "$ARCH" != arm64 ]; then
+    die "$(msg "対応していない環境です（$OS / $ARCH）。Apple Silicon の Mac（macOS 14 Sonoma 以降）か、x86_64 の Linux が必要です。" \
+      "Not supported here ($OS / $ARCH): you need an Apple Silicon Mac with macOS 14 Sonoma or later, or x86_64 Linux.")"
+  fi
+  MACOS_VERSION="$(sw_vers -productVersion 2>/dev/null || echo 0)"
+  MACOS_MAJOR="${MACOS_VERSION%%.*}"
+  case "$MACOS_MAJOR" in ''|*[!0-9]*) MACOS_MAJOR=0 ;; esac
+  if [ "$MACOS_MAJOR" -lt 14 ]; then
+    die "$(msg "macOS $MACOS_VERSION では動きません。Apple Silicon の Mac と macOS 14 Sonoma 以降が必要です。" \
+      "macOS $MACOS_VERSION is too old: you need an Apple Silicon Mac with macOS 14 Sonoma or later.")"
+  fi
+}
+
+# source <tag>: uv tool install に渡すもの。リリースのソース zip（git は要らない）。
+# 0.5 までは zundamon-jarvis という名前で配っている（lalein.system.update.dist_for と同じ）
+source_of() {
+  _dist=lalein
+  case "${1#v}" in 0.[0-5]|0.[0-5].*) _dist=zundamon-jarvis ;; esac
+  printf '%s @ https://github.com/%s/archive/refs/tags/%s.zip' "$_dist" "$OWNER_REPO" "$1"
+}
+
 # 全体を関数に包み、最後の行で呼ぶ。curl | sh が途中で切れても、半端なスクリプトは走らない。
 main() {
   ORIG_PATH="$PATH"
@@ -62,30 +108,9 @@ main() {
   OS="$(uname -s)"
   ARCH="$(uname -m)"
   if [ "$OS" = Linux ]; then
-    die "$(msg "Linux では、この 1 行インストーラは使いません。README の Linux 手順に従ってください。" \
-      "This one-line installer is not for Linux. Follow the Linux steps in the README:")
-    https://github.com/dyoshyy/lalein#linux"
-  fi
-  if [ "$OS" = Darwin ] && [ "$ARCH" != arm64 ] && [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || echo 0)" = 1 ]; then
-    die "$(msg "ターミナルが Rosetta で動いています。Rosetta を使わずに開き直してから、もう一度実行してください。" \
-      "Your terminal is running under Rosetta. Reopen it without Rosetta and run this again.")"
-  fi
-  if [ "$OS" != Darwin ] || [ "$ARCH" != arm64 ]; then
-    die "$(msg "対応していない環境です（$OS / $ARCH）。Apple Silicon の Mac（macOS 14 Sonoma 以降）が必要です。" \
-      "Not supported here ($OS / $ARCH): you need an Apple Silicon Mac with macOS 14 Sonoma or later.")"
-  fi
-  MACOS_VERSION="$(sw_vers -productVersion 2>/dev/null || echo 0)"
-  MACOS_MAJOR="${MACOS_VERSION%%.*}"
-  case "$MACOS_MAJOR" in ''|*[!0-9]*) MACOS_MAJOR=0 ;; esac
-  if [ "$MACOS_MAJOR" -lt 14 ]; then
-    die "$(msg "macOS $MACOS_VERSION では動きません。Apple Silicon の Mac と macOS 14 Sonoma 以降が必要です。" \
-      "macOS $MACOS_VERSION is too old: you need an Apple Silicon Mac with macOS 14 Sonoma or later.")"
-  fi
-
-  # git（macOS の /usr/bin/git は、未導入だと案内ダイアログを出すだけの代役）
-  if ! command -v git >/dev/null 2>&1 || ! git --version >/dev/null 2>&1; then
-    die "$(msg "git が使えません。xcode-select --install を実行してから、もう一度このコマンドを実行してください。" \
-      "git is not available. Run xcode-select --install, then run this command again.")"
+    check_linux
+  else
+    check_mac
   fi
 
   # ② claude
@@ -154,7 +179,7 @@ main() {
     say "    $(msg "すでに $HAVE が入っています。飛ばします" "$HAVE is already installed. Skipping")"
   else
     [ -z "$HAVE" ] || say "    $(msg "$HAVE から $ZJ_VERSION に入れ直します" "Replacing $HAVE with $ZJ_VERSION")"
-    run uv tool install --force --python 3.12 "git+https://github.com/$OWNER_REPO@$ZJ_VERSION"
+    run uv tool install --force --python 3.12 "$(source_of "$ZJ_VERSION")"
   fi
   if [ "$ZJ_DRY_RUN" != 1 ]; then
     command -v lalein >/dev/null 2>&1 || fail_step

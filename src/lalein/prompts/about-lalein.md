@@ -11,7 +11,7 @@ Read this when the user asks how you (Lalein) work, where something is kept, or 
 - **Ears:**
   - The microphone is read continuously, and a voice activity detector (Silero VAD) finds where speech starts and ends.
   - Whisper large-v3-turbo transcribes the speech on the computer: faster-whisper on Linux and Windows, MLX on Apple silicon.
-  - With speakers instead of headphones, the mic hears Lalein. On a Mac with built-in speakers, Lalein stops listening while it talks (`duplex = "half"`). On Linux, PipeWire echo cancellation can be installed (`deploy/install-audio.sh`; its mic is `zundamon_jarvis_aec_source`).
+  - With speakers instead of headphones, the mic hears Lalein. On a Mac with built-in speakers, Lalein stops listening while it talks (`duplex = "half"`). On Linux, PipeWire echo cancellation can be installed (`lalein audio install`; its mic is `zundamon_jarvis_aec_source`).
 - **Brain:** a Claude Code session through the Claude Agent SDK, using the user's `claude` login (never the API key).
   - It runs in the working directory, so that folder's CLAUDE.md, `.claude/` settings, skills and MCP servers apply, as do the user's own (`~/.claude`).
   - An optional notes folder is added as an extra directory.
