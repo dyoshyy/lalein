@@ -49,7 +49,7 @@ from lalein.assistant.policy import describe_action, needs_confirmation
 log = logging.getLogger(__name__)
 
 # Package data, so it is there in a `uv tool install` too (not only in a checkout).
-VOICE_PROMPT = Path(str(resources.files("lalein") / "prompts" / "voice-mode.md"))
+VOICE_PROMPT = Path(str(resources.files("lalein") / "prompts" / "voice-mode.md"))  # harness.VOICE_MODE
 DENY_MESSAGE = "The user declined at the spoken confirmation, so this was not run."
 
 
@@ -228,6 +228,7 @@ class ClaudeBrain:
         client_factory: Callable[[ClaudeAgentOptions], Any] = ClaudeSDKClient,
         prompt_path: Path = VOICE_PROMPT,
         model: str | None = None,
+        instructions: Callable[[], str] | None = None,
     ) -> None:
         self.cwd = cwd
         self.add_dirs = list(add_dirs or [])
@@ -235,6 +236,9 @@ class ClaudeBrain:
         self.busy = False
         self._factory = client_factory
         self._prompt_path = prompt_path
+        # the appended system prompt, built when a session starts (lalein.assistant.harness);
+        # None: the file at prompt_path as it is
+        self._instructions = instructions
         self._queue: asyncio.Queue[BrainEvent] = asyncio.Queue()
         self._client: Any = None
         self._reader: asyncio.Task | None = None
@@ -264,9 +268,13 @@ class ClaudeBrain:
             setting_sources=["user", "project", "local"],
             include_partial_messages=True,
             can_use_tool=self._can_use_tool,
-            system_prompt={"type": "preset", "preset": "claude_code",
-                           "append": self._prompt_path.read_text(encoding="utf-8")},
+            system_prompt={"type": "preset", "preset": "claude_code", "append": self._append()},
         )
+
+    def _append(self) -> str:
+        if self._instructions is not None:
+            return self._instructions()
+        return self._prompt_path.read_text(encoding="utf-8")
 
     async def _ensure_connected(self) -> Any:
         async with self._connect_lock:

@@ -41,6 +41,10 @@ Comments and unknown keys are kept when the tool edits the file. `laleinctl get`
 | logs | `~/.local/state/lalein/` | `~/Library/Logs/lalein/` | `%LOCALAPPDATA%\lalein\logs\` |
 | service | systemd user units | LaunchAgents | `Lalein` in `HKCU\…\CurrentVersion\Run` |
 
+## What Lalein knows about itself
+
+Each conversation starts with a short description of Lalein appended to Claude Code's system prompt: how a turn works, this install's version, folders and settings, and the `laleinctl` commands that change them. So you can ask it how it works, where its logs are, or tell it to talk faster or switch looks. For anything else about itself it reads a fuller reference that ships with it. The text is in `src/lalein/prompts/` (`voice-mode.md`, `about-self.md`, `about-lalein.md`).
+
 ## The character
 
 `laleinctl character` puts it on screen. On Mac and Windows, the menu's **Show / hide the character** does the same. On Linux it is also in the app launcher.

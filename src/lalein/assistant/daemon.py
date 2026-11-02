@@ -718,6 +718,7 @@ class AudioGuard:
 
 async def _amain(start_paused: bool, sock: Path) -> int:
     # Heavy imports here: after the already-running check, and tests of the pieces above stay light.
+    from lalein.assistant import harness
     from lalein.assistant.activity import ActivityFeed
     from lalein.assistant.brain import ClaudeBrain
     from lalein.assistant.convlog import (
@@ -773,7 +774,7 @@ async def _amain(start_paused: bool, sock: Path) -> int:
     def new_brain() -> ClaudeBrain:  # cfg.model is changed live by the settings window
         live.brain_started(cfg.model)
         return ClaudeBrain(cfg.workdir, [cfg.knowledge_dir] if cfg.knowledge_dir else [],
-                           model=cfg.model)
+                           model=cfg.model, instructions=lambda: harness.system_prompt(cfg))
 
     def on_say(text: str, kind: str) -> None:
         live.stop_preview()  # Lalein itself speaking cuts a settings sample
