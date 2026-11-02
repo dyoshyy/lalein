@@ -41,6 +41,8 @@ IDLE_EXIT_S = 600.0  # no board window for this long: the server ends
 KEEPALIVE_S = 15.0
 ACK_WAIT_S = 1.5  # a window has this long to say it showed a page; else show opens a new one
 START_WAIT_S = 5.0
+OPEN_WAIT_S = 8.0  # a window that was opened has this long to show the page, else it is opened again
+OPEN_TRIES = 2  # a browser launched while its last window is closing can quit without a window
 PAGE_NAME = re.compile(r"^[\w.-]+\.html$")
 CHROMIUMS = ("chromium", "chromium-browser", "google-chrome-stable", "google-chrome", "brave",
              "brave-browser", "microsoft-edge-stable", "microsoft-edge")
@@ -406,9 +408,25 @@ def show(path: Path | None, sys_: str | None = None) -> int:
             print("laleinctl show: the board server did not start", file=sys.stderr)
             return 1
         shown = post_show(state, name)
-    if not shown:
-        open_window(url(state), sys_)
+    if not shown and not open_and_wait(state, name, sys_):
+        print("laleinctl show: the board window did not open", file=sys.stderr)
+        return 1
     return 0
+
+
+def open_and_wait(state: dict[str, Any], name: str, sys_: str | None = None,
+                  opener: Callable[[str, str | None], None] = open_window,
+                  shown: Callable[[dict[str, Any], str], bool] = post_show,
+                  clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep) -> bool:
+    """Open a board window and wait until it shows ``name``; open it again if it never does."""
+    for _ in range(OPEN_TRIES):
+        opener(url(state), sys_)
+        deadline = clock() + OPEN_WAIT_S
+        while clock() < deadline:
+            if shown(state, name):
+                return True
+            sleep(0.3)
+    return False
 
 
 def main(args: list[str]) -> int:

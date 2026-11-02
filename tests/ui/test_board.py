@@ -109,3 +109,22 @@ def test_show_needs_a_page(tmp_path, monkeypatch, capsys):
     assert board.show(tmp_path / "missing.html") == 1
     assert board.show(None) == 1 and "nothing has been shown" in capsys.readouterr().err
     assert Path(board.__file__).name == "board.py"
+
+
+def test_a_window_that_never_shows_up_is_opened_again():
+    state = {"port": 1, "token": "t"}
+    clock, opened = [0.0], []
+
+    def sleep(s):
+        clock[0] += s
+
+    def shown_after_the_second_launch(st, name):  # the first launch quit without a window
+        return len(opened) == 2 and clock[0] > board.OPEN_WAIT_S + 1
+
+    assert board.open_and_wait(state, "p.html", "linux", lambda u, s: opened.append(u), shown_after_the_second_launch,
+                               lambda: clock[0], sleep)
+    assert len(opened) == 2 and opened[0] == board.url(state)
+    opened.clear()
+    assert not board.open_and_wait(state, "p.html", "linux", lambda u, s: opened.append(u), lambda st, n: False,
+                                   lambda: clock[0], sleep)
+    assert len(opened) == board.OPEN_TRIES
