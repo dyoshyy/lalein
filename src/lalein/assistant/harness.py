@@ -68,6 +68,7 @@ def facts(cfg: Config, sys_: str | None = None) -> dict[str, str]:
         "ctl": ctl_command(sys_),
         "hotkey": PAUSE_KEYS.get(sys_, "the menu"),
         "reference": str(REFERENCE),
+        "board": str(platform.log_dir(sys_) / "board"),  # lalein.ui.board.board_dir
     }
 
 
