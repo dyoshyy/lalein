@@ -124,10 +124,10 @@ Still no sound? Send the output of `lalein doctor | clip`.""",
     },
     "headphones_linux": {
         "ja": "ヘッドホン（イヤホン）での利用をおすすめします。スピーカーで使うときは、PipeWire のエコーキャンセル"
-              "（リポジトリの deploy/install-audio.sh）を入れて、マイクに「zundamon_jarvis_aec_source」を選んでください。"
+              "（`lalein audio install`）を入れて、マイクに「zundamon_jarvis_aec_source」を選んでください。"
               "どちらでも、しゃべっている途中に話しかけて止められます。",
         "en": "Headphones (or earbuds) are recommended. For speakers, set up PipeWire echo cancellation "
-              "(deploy/install-audio.sh in the repository) and choose “zundamon_jarvis_aec_source” as the "
+              "(`lalein audio install`) and choose “zundamon_jarvis_aec_source” as the "
               "microphone. Either way, you can talk over it to stop it.",
     },
     "config_unreadable": {

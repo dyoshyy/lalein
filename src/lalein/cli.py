@@ -1,7 +1,8 @@
 """`lalein daemon [--start-paused]` / `voices [--no-play]` / `menubar` (macOS) /
 `tray` / `supervise` (Windows) / `service` / `engine install` / `models download` / `setup` /
 `doctor` / `update [--check] [--yes]` / `uninstall` / `migrate` (an install from before the
-rename to its new name; ``daemon`` starts it on its own when one is pending)."""
+rename to its new name; ``daemon`` starts it on its own when one is pending) / `audio` (Linux's
+echo-cancel extras)."""
 
 import sys
 
@@ -10,7 +11,8 @@ USAGE = ("usage: lalein setup [--cli] | lalein doctor | lalein uninstall"
          " | lalein daemon [--start-paused] | lalein voices [--no-play]"
          " | lalein menubar | lalein tray | lalein supervise"
          " | lalein service install|uninstall|status|start|stop"
-         " | lalein engine install [--cpu] | lalein models download | lalein migrate")
+         " | lalein engine install [--cpu] | lalein models download | lalein migrate"
+         " | lalein audio install|uninstall|output [choice]")
 TEXT = {  # lalein.core.i18n: the display language
     "model_fetching": {"ja": "文字起こしのモデルを取得しています（初回は数 GB あり、時間がかかります）…",
                        "en": "Downloading the speech-to-text model (several GB the first time; this takes a while)…"},
@@ -113,6 +115,10 @@ def main(argv: list[str] | None = None) -> int:
         from lalein.system import update
 
         return update.main(rest)
+    if cmd == "audio":
+        from lalein.system import audio
+
+        return audio.main(rest)
     if cmd == "uninstall":
         from lalein.setup import wizard as setup_wizard
 

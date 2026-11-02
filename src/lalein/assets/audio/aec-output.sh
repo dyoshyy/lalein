@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Choose where ZundamonJarvis audio comes out, persistently (applied now and re-applied by zundamon-jarvis-aec-output.service).
-# Usage: deploy/aec-output.sh auto|bluez|hdmi|<sink name>   (no argument: show choice + list sinks)
+# Usage: lalein audio output auto|bluez|hdmi|<sink name>   (no argument: show choice + list sinks)
 #   auto = Bluetooth headphones when connected, otherwise HDMI.
 set -euo pipefail
 . "$(dirname "$0")/audio-lib.sh"

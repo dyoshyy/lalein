@@ -2,7 +2,7 @@
 # Install the ZundamonJarvis echo-cancel PipeWire config and make zundamon_jarvis_aec_sink the default sink.
 # Idempotent. Restarts pipewire/pipewire-pulse/wireplumber only when the config link changes
 # or the AEC nodes are missing (audio drops for a second or two).
-# Back out with deploy/uninstall-audio.sh.
+# Back out with `lalein audio uninstall`.
 set -euo pipefail
 . "$(dirname "$0")/audio-lib.sh"
 

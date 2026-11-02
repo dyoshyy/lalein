@@ -46,7 +46,7 @@ log = logging.getLogger(__name__)
 
 FRAME_SAMPLES = 512
 # Linux: set mic_device = "zundamon_jarvis_aec_source" in config.toml to use echo cancellation
-# (see deploy/). On a Mac mic_device is a CoreAudio input device name, on Windows an MME one.
+# (see `lalein audio`). On a Mac mic_device is a CoreAudio input device name, on Windows an MME one.
 _MAX_BUFFERED_FRAMES = 500  # ~16 s; the oldest frames are dropped beyond this
 CLOSE_TIMEOUT_S = 5.0
 

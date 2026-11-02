@@ -12,7 +12,7 @@ What it moves:
   ``dev.zundamon-jarvis.*`` launchd agents; the ``ZundamonJarvis`` Run value) are stopped and
   removed, then ``service.install_services`` installs the new ones and starts them;
 - on Linux the app launcher entry and its icon, and the echo-cancel extras
-  (``deploy/install-audio.sh``): they keep their names, but their scripts and the chosen output
+  (``lalein audio install``): they keep their names, but their scripts and the chosen output
   are in the directories that move, so ``AEC_UNIT`` and the script copies are pointed there.
 
 It runs once: ``MARKER`` in the new data directory says it is done. An install from before the
@@ -46,7 +46,7 @@ STARTED = "migrate.started"  # in the runtime directory: a migration was started
 RESTART_AFTER_S = 15 * 60  # a start older than this failed or was interrupted: try again
 LOG = "migrate.log"
 AEC_UNIT = "zundamon-jarvis-aec-output.service"
-AEC_PATHS = (  # (old, new) in the unit and in the copies of deploy/audio-lib.sh
+AEC_PATHS = (  # (old, new) in the unit and in the copies of assets/audio/audio-lib.sh
     (".local/share/zundamon-jarvis/audio", ".local/share/lalein/audio"),
     ("/.config}/zundamon-jarvis/aec-output", "/.config}/lalein/aec-output"),
     ('/.local/state}/zundamon-jarvis"', '/.local/state}/lalein"'),
