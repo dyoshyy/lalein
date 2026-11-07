@@ -41,7 +41,7 @@ character needs GTK4 and gtk4-layer-shell with their Python bindings (Arch: `pyt
 **Windows** (PowerShell, no admin rights needed)
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/dyoshyy/lalein/main/install.ps1 | iex"
+iex (irm https://raw.githubusercontent.com/dyoshyy/lalein/main/install.ps1)
 ```
 
 The installer opens the setup window. It downloads the voice engine and the speech model, then walks you
