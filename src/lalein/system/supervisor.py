@@ -27,13 +27,16 @@ Single instance: ``supervisor.lock`` in ``platform.runtime_dir()`` stays locked 
 supervisor's life. The OS drops the lock when the process dies, so a crash leaves nothing stale
 (a pid file alone could name a reused pid). ``supervisor.pid`` beside it names the process for
 the last-resort kill; it is a separate file because Windows locks are mandatory (a locked byte
-cannot even be read). A second ``supervise`` exits 3 at once.
+cannot even be read). A second ``supervise`` exits 3 at once. The runtime directory does not
+move with the rename's migration (``lalein.core.platform``), but a supervisor from before that
+was fixed holds its lock in the old folder's ``run``, so that lock counts too (``claim``).
 
 Stopping (``stop``; ``lalein service stop|uninstall``, and ``install`` before it starts a
 fresh one): there is no SIGTERM to send on Windows, so the stopper creates ``supervisor.stop``.
 The supervisor sees it within a second, asks the daemon to ``quit`` (it closes the Claude session
 cleanly), waits up to 60 s for it (``TimeoutStopSec`` in the unit), ends the engine and the tray,
-and exits. If it is still there after that, the stopper kills its process tree.
+and exits. If it is still there after that, the stopper kills its process tree. The supervisor
+keeps the endpoint it started with: it only ever asks its own daemon to quit.
 """
 
 import logging
@@ -359,21 +362,55 @@ def _read_pid(path: Path) -> int | None:
         return None
 
 
+def _run_dirs(system: str | None) -> list[Path]:
+    """The runtime directory, then the old folder's where one from before may still run."""
+    old = platform.legacy_runtime_dir(system)
+    return [platform.runtime_dir(system), *([old] if old else [])]
+
+
+def _held(run: Path) -> bool:
+    lock = run / LOCK
+    return lock.exists() and is_running(lock)  # no lock file: nobody holds it, and none is created
+
+
 def running_pid(system: str | None = None) -> int | None:
     """The running supervisor's pid (0 if it runs but its pid file is unreadable), or None."""
-    run = platform.runtime_dir(system)
-    if not is_running(run / LOCK):
+    for run in _run_dirs(system):
+        if _held(run):
+            return _read_pid(run / PID) or 0
+    return None
+
+
+def claim(system: str | None = None) -> InstanceLock | None:
+    """The supervisor's lock, held; None while a supervisor runs in either folder. Taken before
+    the old folder is looked at: of two claims at once, at least one sees the other."""
+    lock = InstanceLock(platform.runtime_dir(system) / LOCK)
+    if not lock.acquire():
         return None
-    return _read_pid(run / PID) or 0
+    old = platform.legacy_runtime_dir(system)
+    if old is not None and _held(old):
+        lock.release()
+        return None
+    return lock
 
 
-def _quit_daemon() -> None:
+def _quit_daemon(endpoint: Path | None = None) -> None:
     from lalein.core.control import request
 
-    request("quit", timeout=5.0)
+    request("quit", path=endpoint, timeout=5.0)
 
 
-def stop(system: str | None = None, *, quit_daemon: Callable[[], Any] = _quit_daemon,
+def _quit_daemons(system: str | None) -> None:
+    """Ask the daemon at each endpoint; one that does not answer must not spare the other."""
+    name = platform.socket_path(system).name
+    for run in _run_dirs(system):
+        try:
+            _quit_daemon(run / name)
+        except (OSError, ValueError):
+            pass  # not running
+
+
+def stop(system: str | None = None, *, quit_daemon: Callable[[], Any] | None = None,
          kill: Callable[[int], Any] = kill_tree, clock: Callable[[], float] = time.monotonic,
          sleep: Callable[[float], Any] = time.sleep,
          timeout_s: float = STOP_TIMEOUT_S + STOPPER_SLACK_S) -> str:
@@ -382,31 +419,32 @@ def stop(system: str | None = None, *, quit_daemon: Callable[[], Any] = _quit_da
     The daemon is asked to quit even with no supervisor: one left behind by a killed supervisor
     would keep the control endpoint, and every new daemon would exit 3 for good.
     """
-    run = platform.runtime_dir(system)
-    lock = run / LOCK
-    running = is_running(lock)
-    if running:
+    running = [run for run in _run_dirs(system) if _held(run)]
+    for run in running:
         (run / STOP).write_text("", encoding="utf-8")
-    try:
-        quit_daemon()  # the supervisor asks too; asking now saves it a poll
+    try:  # the supervisor asks too; asking now saves it a poll
+        quit_daemon() if quit_daemon else _quit_daemons(system)
     except (OSError, ValueError):
         pass  # not running
     if not running:
         return "not running"
     deadline = clock() + timeout_s
     while clock() < deadline:
-        if not is_running(lock):
+        if not any(_held(run) for run in running):
             return "stopped"
         sleep(0.5)
-    pid = _read_pid(run / PID)
-    log.warning("the supervisor did not stop in %.0f s; killing pid %s", timeout_s, pid)
-    if pid is not None:
-        kill(pid)
+    for run in running:
+        if _held(run):
+            pid = _read_pid(run / PID)
+            log.warning("the supervisor did not stop in %.0f s; killing pid %s", timeout_s, pid)
+            if pid is not None:
+                kill(pid)
     for _ in range(20):  # the lock goes when the process is gone
-        if not is_running(lock):
+        if not any(_held(run) for run in running):
             break
         sleep(0.5)
-    (run / STOP).unlink(missing_ok=True)
+    for run in running:
+        (run / STOP).unlink(missing_ok=True)
     return "killed"
 
 
@@ -424,11 +462,12 @@ def main(argv: list[str] | None = None, system: str | None = None) -> int:
         handlers.append(logging.StreamHandler())
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s",
                         handlers=handlers, force=True)
-    run = platform.runtime_dir(sys_)
-    lock = InstanceLock(run / LOCK)
-    if not lock.acquire():
+    lock = claim(sys_)
+    if lock is None:
         log.info("the supervisor is already running")
         return EXIT_ALREADY_RUNNING
+    run = lock.path.parent
+    endpoint = platform.socket_path(sys_)  # its daemon's, whatever the path says later
     stop_file, pid_file = run / STOP, run / PID
     try:
         stop_file.unlink(missing_ok=True)  # left by a stopper that had to kill the last one
@@ -438,7 +477,8 @@ def main(argv: list[str] | None = None, system: str | None = None) -> int:
         specs = child_specs(sys_, service.find_exe(sys_))
         sup = Supervisor(specs, spawn=lambda spec: spawn_child(spec, logs, sys_))
         log.info("supervisor started (pid %s)", os.getpid())
-        serve(sup, should_stop=stop_file.exists, sleep=time.sleep, quit_daemon=_quit_daemon)
+        serve(sup, should_stop=stop_file.exists, sleep=time.sleep,
+              quit_daemon=lambda: _quit_daemon(endpoint))
     finally:
         pid_file.unlink(missing_ok=True)
         stop_file.unlink(missing_ok=True)

@@ -8,7 +8,11 @@ Before 0.5 the app was called zundamon-jarvis (``LEGACY_APP``). Until ``lalein m
 (``lalein.system.migrate``) moves them, its directories are used where there are no new
 ones: ``config_dir``, ``data_dir`` and ``log_dir`` give the old one when only it exists. The
 runtime directory and the control endpoint are made afresh at every start, so they are new
-only. ``*_dir(..., legacy=False)`` is the new place whatever exists (the migration's target).
+only, and they stay put while the migration runs: everything that finds a running process
+through them (the supervisor's lock, the daemon's endpoint) sees the same place before and after.
+On Windows that place is ``run`` inside the new data directory, so ``run`` alone does not make
+the new directory the one in use. ``*_dir(..., legacy=False)`` is the new place whatever exists
+(the migration's target).
 
 The control endpoint (``socket_path``) is a Unix socket on Linux and macOS. Windows has no
 ``asyncio`` Unix sockets, so there it is a small JSON file (``control.json``: the localhost TCP
@@ -23,6 +27,7 @@ from typing import Literal
 
 APP = "lalein"
 LEGACY_APP = "zundamon-jarvis"  # the name before 0.5
+RUN = "run"  # Windows: the runtime directory, inside the data directory
 
 
 System = Literal["linux", "mac", "windows"]
@@ -65,12 +70,26 @@ def config_dir(sys_: str | None = None, legacy: bool = True) -> Path:
     return _either(lambda app: Path.home() / ".config" / app, legacy)
 
 
+def _win_data(app: str) -> Path:
+    return _win_env("LOCALAPPDATA", "AppData/Local") / app
+
+
+def _has_data(d: Path) -> bool:
+    """``d`` holds something besides the runtime directory, which is made before any migration."""
+    try:
+        return any(entry.name != RUN for entry in d.iterdir())
+    except OSError:
+        return False
+
+
 def data_dir(sys_: str | None = None, legacy: bool = True) -> Path:
     s = _sys(sys_)
     if s == "mac":
         return _either(_mac_support, legacy)
     if s == "windows":
-        return _either(lambda app: _win_env("LOCALAPPDATA", "AppData/Local") / app, legacy)
+        if legacy and (old := _win_data(LEGACY_APP)).exists() and not _has_data(_win_data(APP)):
+            return old
+        return _win_data(APP)
     return _either(lambda app: Path.home() / ".local" / "share" / app, legacy)
 
 
@@ -113,10 +132,19 @@ def _private_dir(d: Path) -> Path:
 def runtime_dir(sys_: str | None = None) -> Path:
     s = _sys(sys_)
     if s == "windows":
-        return _private_dir(data_dir(s) / "run")
+        return _private_dir(data_dir(s, legacy=False) / RUN)
     if s == "mac":
         return _private_dir(Path(os.environ.get("TMPDIR") or "/tmp") / f"{APP}-{os.getuid()}")
     return Path(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}")
+
+
+def legacy_runtime_dir(sys_: str | None = None) -> Path | None:
+    """Windows: where a supervisor and daemon started before the runtime directory stopped moving
+    may still run (the old data directory's ``run``), if it is there. Never created."""
+    if _sys(sys_) != "windows":
+        return None
+    old = _win_data(LEGACY_APP) / RUN
+    return old if old.is_dir() else None
 
 
 def socket_path(sys_: str | None = None) -> Path:
