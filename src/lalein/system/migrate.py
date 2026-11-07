@@ -10,7 +10,10 @@ What it moves:
 - the always-on services: the old registrations (the ``zundamon-jarvis.service`` systemd unit
   and the old ``voicevox.service``, which runs the engine from the old directory; the
   ``dev.zundamon-jarvis.*`` launchd agents; the ``ZundamonJarvis`` Run value) are stopped and
-  removed, then ``service.install_services`` installs the new ones and starts them;
+  removed, then ``service.install_services`` installs the new ones and starts them. On Windows a
+  supervisor is stopped first with or without that Run value (it holds the folders' files open),
+  started again afterwards if there was one, and none can start while the folders move: the
+  migration holds its lock. If one will not go away, nothing moves and the next start tries again;
 - on Linux the app launcher entry and its icon, and the echo-cancel extras
   (``lalein audio install``): they keep their names, but their scripts and the chosen output
   are in the directories that move, so ``AEC_UNIT`` and the script copies are pointed there.
@@ -19,7 +22,9 @@ It runs once: ``MARKER`` in the new data directory says it is done. An install f
 rename that updates to 0.5 keeps running under its old services, so ``lalein daemon`` starts
 the migration on its own (``start_if_pending``), detached: it stops those services, the daemon
 that started it among them. On Linux a process started from a unit dies with the unit, so it
-runs in a transient unit of its own (``systemd-run``).
+runs in a transient unit of its own (``systemd-run``). On Windows that daemon exits instead of
+loading its models: it could not be asked to quit before they are loaded, so the supervisor would
+end up killing its process tree, the migration included.
 
 Everything outside (commands, the registry, the supervisor, the service install) comes in as
 parameters, for the tests.
@@ -182,7 +187,8 @@ def _uid() -> int:
 
 def migrate(sys_: str | None = None, run: Callable = subprocess.run, home: Path | None = None,
             uid: int | None = None, registry: Any = None, stop: Callable[[], Any] | None = None,
-            install: Callable[[str], Any] = service.install_services) -> list[str]:
+            install: Callable[[str], Any] = service.install_services,
+            start: Callable[[str], Any] = service.start_services) -> list[str]:
     """Move the directories and the services to the new name (see the module). Idempotent."""
     sys_ = sys_ or platform.system()
     home = Path(home) if home else Path.home()
@@ -190,16 +196,36 @@ def migrate(sys_: str | None = None, run: Callable = subprocess.run, home: Path 
         registry = registry or service.RunKey()
     had_services = _legacy_registered(sys_, home, registry)
     out = remove_legacy_services(sys_, run, home, uid, registry, stop) if had_services else []
-    for old, new in moves(sys_):
-        out += move_dir(old, new)
+    restart, guard = False, None
+    if sys_ == "windows":
+        if not had_services:  # that branch has just stopped it, and install starts it again
+            restart = (stop or (lambda: supervisor.stop(sys_)))() != "not running"
+        guard = supervisor.claim(sys_)
+    blocked = sys_ == "windows" and guard is None
+    if blocked:
+        out.append("a supervisor is still running: nothing moved, the next start tries again")
+    else:
+        try:
+            if old_run := platform.legacy_runtime_dir(sys_):
+                shutil.rmtree(old_run, ignore_errors=True)  # nothing runs there: only leftovers
+            for old, new in moves(sys_):
+                out += move_dir(old, new)
+        finally:
+            if guard is not None:
+                guard.release()
     if sys_ == "linux":
         out += repoint_audio(run, home)
     if had_services:
         install(sys_)
         out.append("installed the services under the new name")
+    if blocked:
+        return out
     data = platform.data_dir(sys_, legacy=False)
     data.mkdir(parents=True, exist_ok=True)
     (data / MARKER).write_text(time.strftime("%Y-%m-%d %H:%M:%S\n"), encoding="utf-8")
+    if restart:  # after the marker: the daemon it starts must find nothing left to migrate
+        start(sys_)
+        out.append("started the supervisor again")
     return out
 
 

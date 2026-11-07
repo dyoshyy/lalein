@@ -117,7 +117,7 @@ If it doesn't start at login, check that **Lalein** is on in Settings > Apps > S
 - **Login services:**
   - Linux: `zundamon-jarvis.service` becomes `lalein.service`, and `voicevox.service` is rewritten for the new folder.
   - macOS: the `dev.zundamon-jarvis.*` agents become `dev.lalein.*`.
-  - Windows: the `ZundamonJarvis` Run value becomes `Lalein`.
+  - Windows: the `ZundamonJarvis` Run value becomes `Lalein`. A running supervisor is stopped for the move and started again afterwards.
 - **Commands:** `lalein`, `laleinctl` and `laleinw`. 0.5 kept the old names as aliases; 0.6 dropped them.
 - **By hand:**
   - Window rules and key bindings that name `zundamon-jarvis-watch`, `zundamon-jarvis-settings` or `zundamon-jarvis-character` need the new names: `lalein-watch`, `lalein-settings` and `lalein-character`.

@@ -37,9 +37,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if cmd == "daemon":
         from lalein.assistant.daemon import main as daemon_main
+        from lalein.core import platform
         from lalein.system import migrate
 
-        migrate.start_if_pending()  # an install from before the rename: it restarts us under the new name
+        started = migrate.start_if_pending()  # an install from before the rename: it restarts us under the new name
+        if started and platform.system() == "windows":  # see lalein.system.migrate
+            print("lalein: moving to the new folders; a running service starts again afterwards", file=sys.stderr)
+            return 0
         return daemon_main(rest)
     if cmd == "migrate":
         from lalein.system import migrate
