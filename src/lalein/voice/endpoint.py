@@ -2,6 +2,11 @@
 
 Onset after ``start_ms`` of speech, end after ``end_silence_ms`` of silence, or a forced cut
 (``Utterance.cut``) once an utterance reaches ``max_utterance_s`` (default 30 s).
+
+The utterance starts ``preroll_ms`` before the onset run. A quiet or soft start (a webcam mic
+at a distance, after echo cancellation's noise suppression) has the VAD hovering around the
+threshold for half a second or more before ``start_ms`` of speech in a row: the preroll has to
+cover that too, or the first words are lost.
 """
 
 import math
@@ -35,7 +40,7 @@ class Endpointer:
         start_ms: int = 250,
         end_silence_ms: int = 1500,
         threshold: float = 0.35,
-        preroll_ms: int = 300,
+        preroll_ms: int = 1000,
         max_utterance_s: float = 30.0,
     ):
         # A VAD that never drops below the threshold (noise, a stuck state) would otherwise
