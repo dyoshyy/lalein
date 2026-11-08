@@ -24,6 +24,19 @@ def test_utterance_includes_preroll():
     assert len(ev[1].audio) >= 512 * (10 + 9)  # 300ms preroll
 
 
+def test_utterance_keeps_a_hesitant_start():
+    """A soft start: the VAD flickers around the threshold for ~0.8 s before a run of
+    start_ms. Every flickering frame belongs to the utterance (the first words were lost
+    with a 300 ms preroll)."""
+    ep = Endpointer()
+    probs = [0.0] * 40 + [0.5, 0.2] * 12 + [0.9] * 10 + [0.0] * 47
+    out = []
+    for i, p in enumerate(probs):
+        out += ep.feed(np.full(512, i, np.float32), p)
+    utt = next(e for e in out if isinstance(e, Utterance))
+    assert utt.audio[0] <= 40 - 1  # starts before the first flicker frame (index 40)
+
+
 def test_short_pause_does_not_split():
     ev = feed_seq(Endpointer(), [0.9] * 10 + [0.0] * 10 + [0.9] * 10 + [0.0] * 47)
     assert sum(isinstance(e, Utterance) for e in ev) == 1

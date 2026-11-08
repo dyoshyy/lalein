@@ -974,6 +974,107 @@ async def test_a_cut_utterance_resets_the_vad_and_warns(parts, caplog):
     await task
 
 
+SECOND = SAMPLE_RATE // 512  # frames (31; 63 make the 2 s reset interval)
+
+
+async def test_silence_resets_the_vad_every_2s_of_audio(parts):
+    calls, audio, vad, ep, orch, log = parts
+    d = make(parts)
+    task = await started(d)
+    calls.clear()
+    for _ in range(63 * 3):
+        audio.push(frame(0.0))
+    await settle(400)
+    assert calls == ["vad.reset"] * 3 and ep.fed == 63 * 3  # every frame still goes on
+    d.stop()
+    await task
+
+
+async def test_no_periodic_reset_in_speech(parts):
+    calls, audio, vad, ep, orch, log = parts
+    d = make(parts)
+    task = await started(d)
+    calls.clear()
+    ep.in_speech = True  # e.g. the end-of-speech silence of an utterance
+    for _ in range(63 * 3):
+        audio.push(frame(0.0))
+    await settle(400)
+    assert calls == []
+    ep.in_speech = False
+    audio.push(frame(0.0))
+    await settle()
+    assert calls == ["vad.reset"]  # carried over: at the first quiet frame
+    d.stop()
+    await task
+
+
+async def test_a_borderline_probability_carries_the_reset_over(parts):
+    calls, audio, vad, ep, orch, log = parts
+    d = make(parts)
+    task = await started(d)
+    calls.clear()
+    for _ in range(62):
+        audio.push(frame(0.0))
+    for p in [0.1, 0.0, 0.0, 0.0, 0.0]:  # due now, but 0.1 is not clear non-speech
+        audio.push(frame(p))
+    await settle(200)
+    assert calls == []
+    audio.push(frame(0.0))  # the 5th low frame in a row
+    await settle()
+    assert calls == ["vad.reset"]
+    d.stop()
+    await task
+
+
+async def test_other_resets_restart_the_interval(parts):
+    calls, audio, vad, ep, orch, log = parts
+    d = make(parts)
+    task = await started(d)
+    for _ in range(60):
+        audio.push(frame(0.0))
+    await settle(200)
+    d.set_ears_muted(True)
+    d.set_ears_muted(False)  # resets the VAD: 2 s from here
+    calls.clear()
+    for _ in range(62):
+        audio.push(frame(0.0))
+    await settle(200)
+    assert calls == []
+    audio.push(frame(0.0))
+    await settle()
+    assert calls == ["vad.reset"]
+    d.stop()
+    await task
+
+
+async def test_speech_onset_works_after_periodic_resets(parts):
+    from lalein.voice.endpoint import Endpointer
+
+    calls, audio, vad, _, orch, log = parts
+    ep = Endpointer()
+    d = Daemon(audio, vad, ep, orch, log)
+    task = await started(d)
+    calls.clear()
+    for _ in range(SECOND * 30):  # 30 s of silence
+        audio.push(frame(0.0))
+    await settle(1200)
+    assert calls.count("vad.reset") == SECOND * 30 // 63
+    calls.clear()
+    for _ in range(10):  # 320 ms of speech
+        audio.push(frame(0.9))
+    for _ in range(47):  # then the 1.5 s of silence that ends it
+        audio.push(frame(0.0))
+    await settle(300)
+    assert orch.started == 1 and len(orch.utterances) == 1
+    assert len(orch.utterances[0]) >= 512 * (32 + 10)  # the 1 s preroll is intact
+    assert calls == []  # never reset from the onset to the end of the utterance
+    audio.push(frame(0.0))
+    await settle()
+    assert calls == ["vad.reset"]  # the reset that came due meanwhile, right after it
+    d.stop()
+    await task
+
+
 async def test_speech_events_are_logged(parts, caplog):
     import logging
 

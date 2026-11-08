@@ -19,6 +19,8 @@ Mic (AudioIn) -> SileroVad -> Endpointer -> Orchestrator, plus the control socke
   stops (the echo tail; a gap between streamed sentences stays muted) the endpointer and the
   VAD are reset once. Dropped frames still count as arrived (watchdog) and never as digital
   silence. Full duplex (always on Linux unless ``half`` is set) is the plain pipeline.
+- The VAD's state is also reset every 2 s of processed audio while nobody speaks
+  (``vad_reset.VadReset``): long silence otherwise makes it slow to notice the next speech.
   ``auto`` sees the output PortAudio found when the daemon started: after switching outputs
   (plugging in headphones), restart the daemon, or set ``duplex = "half"``.
 - Startup: if another daemon holds the socket, exit 3 (EXIT_ALREADY_RUNNING) before any heavy
@@ -60,6 +62,7 @@ from lalein.core import control, platform
 from lalein.core.diag import RateLimitedLog, Window
 from lalein.voice.endpoint import SpeechStarted, Utterance
 from lalein.voice.mics import output_is_builtin_speaker, output_is_headphones
+from lalein.voice.vad_reset import VadReset
 
 log = logging.getLogger(__name__)
 
@@ -123,6 +126,7 @@ class Daemon:
     ) -> None:
         self._audio = audio
         self._vad = vad
+        self._vad_reset = VadReset()  # periodic resets in silence
         self._endpointer = endpointer
         self._orch = orch
         self._log = log_
@@ -216,7 +220,7 @@ class Daemon:
         self._resumed.clear()
         self._audio.close()  # the listen loop's frames() ends; nothing more is read
         self._endpointer.reset()
-        self._vad.reset()
+        self._fresh_vad()
         self._set_hearing(False)
         await self._orch.pause()
         log.info("paused")
@@ -226,7 +230,7 @@ class Daemon:
             return
         self._end_preview("resume")
         self._endpointer.reset()
-        self._vad.reset()
+        self._fresh_vad()
         try:
             self._audio.open()
         except Exception:
@@ -276,7 +280,7 @@ class Daemon:
         tell the orchestrator, or it would keep waiting for it (speech held, clocks stopped)."""
         was = self._endpointer.in_speech or self._orch.user_talking
         self._endpointer.reset()
-        self._vad.reset()
+        self._fresh_vad()
         self._speech_since = None
         self._set_hearing(False)
         if was:
@@ -285,6 +289,10 @@ class Daemon:
                 self._orch.on_speech_abandoned()
             except Exception:
                 log.exception("orchestrator failed on abandoned speech")
+
+    def _fresh_vad(self) -> None:
+        self._vad.reset()
+        self._vad_reset.restart()
 
     def debug(self) -> dict:
         """``jarvisctl debug``: where the ears are, to find out what gets stuck."""
@@ -462,6 +470,8 @@ class Daemon:
             self._set_hearing(False)
             return
         prob = self._vad.prob(frame)
+        if self._vad_reset.due(prob, quiet=not self._endpointer.in_speech):
+            self._vad.reset()  # from the next frame; this one's prob stands
         self._probs.add(prob)
         self._hb_prob = max(self._hb_prob, prob)
         for ev in self._endpointer.feed(frame, prob):
@@ -481,7 +491,7 @@ class Daemon:
                 if getattr(ev, "cut", False):
                     log.warning("utterance cut at %.1f s: the VAD never fell silent; "
                                 "resetting the VAD", seconds)
-                    self._vad.reset()
+                    self._fresh_vad()
                 else:
                     self._rlog(logging.INFO, "utterance", "utterance %.1f s", seconds)
                 self._spawn(self._orch.on_utterance(ev.audio))
